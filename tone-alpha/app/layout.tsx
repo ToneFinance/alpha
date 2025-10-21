@@ -14,7 +14,7 @@ const sourceCodePro = Source_Code_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "TONE Finance - On-Chain Sector Tokens",
+  title: "Tone Finance - On-Chain Sector Tokens",
   description:
     "Invest in diversified crypto sectors with on-chain ETF-like tokens on Base",
 };

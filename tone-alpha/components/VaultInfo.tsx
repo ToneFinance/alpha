@@ -48,7 +48,7 @@ export function VaultInfo() {
       )}
 
       <p className={styles.description} style={{ marginTop: "20px", marginBottom: 0 }}>
-        TONE Finance sector tokens are on-chain ETFs representing a basket of DeFi tokens.
+        Tone Finance sector tokens are on-chain ETFs representing a basket of DeFi tokens.
         Deposit USDC to receive sector tokens, which can be withdrawn for underlying assets.
       </p>
     </div>

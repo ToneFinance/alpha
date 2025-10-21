@@ -5,14 +5,22 @@ import { DepositCard } from "../components/DepositCard";
 import { WithdrawCard } from "../components/WithdrawCard";
 import { VaultInfo } from "../components/VaultInfo";
 import { PendingDepositsCard } from "../components/PendingDepositsCard";
+import Image from "next/image";
 
 export default function Home() {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
         <div className={styles.logo}>
+          <Image
+            src="/logo.png"
+            alt="Tone Finance Logo"
+            width={60}
+            height={60}
+            style={{ borderRadius: "50%" }}
+          />
           <div>
-            <div className={styles.logoText}>TONE Finance</div>
+            <div className={styles.logoText}>Tone Finance</div>
             <div className={styles.logoSubtext}>On-Chain Sector Tokens</div>
           </div>
         </div>
