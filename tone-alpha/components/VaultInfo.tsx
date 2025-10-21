@@ -1,6 +1,7 @@
 "use client";
 
 import { useSectorVault, formatTokenAmount, useTokenSymbol } from "../lib/hooks/useSectorVault";
+import { AddTokenButton } from "./AddTokenButton";
 import styles from "./Card.module.css";
 
 function TokenRow({ address, balance }: { address: string; balance: bigint }) {
@@ -51,6 +52,8 @@ export function VaultInfo() {
         Tone Finance sector tokens are on-chain ETFs representing a basket of DeFi tokens.
         Deposit USDC to receive sector tokens, which can be withdrawn for underlying assets.
       </p>
+
+      <AddTokenButton />
     </div>
   );
 }

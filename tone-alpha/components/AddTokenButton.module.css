@@ -1,0 +1,25 @@
+.addTokenButton {
+  width: 100%;
+  padding: 12px 20px;
+  background: rgba(77, 158, 255, 0.1);
+  border: 1px solid rgba(77, 158, 255, 0.3);
+  border-radius: 8px;
+  color: #4d9eff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  margin-top: 16px;
+}
+
+.addTokenButton:hover:not(:disabled) {
+  background: rgba(77, 158, 255, 0.2);
+  border-color: #4d9eff;
+  transform: translateY(-1px);
+}
+
+.addTokenButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
