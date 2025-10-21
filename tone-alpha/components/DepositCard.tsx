@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAccount } from "wagmi";
 import {
   useSectorVault,
@@ -14,13 +14,34 @@ import styles from "./Card.module.css";
 export function DepositCard() {
   const { isConnected } = useAccount();
   const [amount, setAmount] = useState("");
+  const depositAmountRef = useRef<bigint>(0n);
 
   const { usdcBalance, usdcAllowance, refetchAll } = useSectorVault();
-  const { approve, isPending: isApproving, isConfirming: isApprovingConfirming, isSuccess: isApproved } = useApproveUsdc();
+  const { approve, isPending: isApproving, isConfirming: isApprovingConfirming, isSuccess: isApproved, hash: approveHash } = useApproveUsdc();
   const { deposit, isPending: isDepositing, isConfirming: isDepositingConfirming, isSuccess: isDeposited } = useDeposit();
 
   const amountBigInt = amount ? parseTokenAmount(amount, 6) : 0n; // USDC has 6 decimals
   const needsApproval = usdcAllowance !== undefined && amountBigInt > usdcAllowance;
+
+  // Store the deposit amount when approval is initiated
+  useEffect(() => {
+    if (isApproving && amountBigInt > 0n) {
+      depositAmountRef.current = amountBigInt;
+    }
+  }, [isApproving, amountBigInt]);
+
+  // Automatically trigger deposit after approval is confirmed
+  useEffect(() => {
+    if (isApproved && depositAmountRef.current > 0n) {
+      // Refetch allowance to ensure it's updated
+      refetchAll();
+      // Trigger deposit after a short delay to ensure state is updated
+      const timer = setTimeout(() => {
+        deposit(depositAmountRef.current);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isApproved, approveHash, deposit, refetchAll]);
 
   const handleApprove = () => {
     if (!amountBigInt) return;
@@ -41,10 +62,12 @@ export function DepositCard() {
   // Handle successful deposit
   useEffect(() => {
     if (isDeposited) {
+      // Immediately refetch to show the pending deposit
+      refetchAll();
+
       // Reset form after a delay
       const timer = setTimeout(() => {
         setAmount("");
-        refetchAll();
       }, 2000);
 
       return () => clearTimeout(timer);
@@ -93,17 +116,25 @@ export function DepositCard() {
         </div>
       </div>
 
+      {needsApproval && (
+        <p className={styles.infoMessage}>
+          First-time deposit requires 2 transactions: approve USDC spending, then deposit
+        </p>
+      )}
+
       {needsApproval ? (
         <button
           onClick={handleApprove}
-          disabled={isApproving || isApprovingConfirming || !amountBigInt}
+          disabled={isApproving || isApprovingConfirming || isDepositing || isDepositingConfirming || !amountBigInt}
           className={styles.button}
         >
           {isApproving || isApprovingConfirming
-            ? "Approving..."
+            ? "Approving... (1/2)"
+            : isApproved && (isDepositing || isDepositingConfirming)
+            ? "Depositing... (2/2)"
             : isApproved
             ? "Approved ✓"
-            : "Approve USDC"}
+            : "Approve & Deposit"}
         </button>
       ) : (
         <button

@@ -146,14 +146,18 @@ export function useWithdraw() {
  * Hook to read a specific pending deposit
  */
 export function usePendingDeposit(depositId: bigint | undefined) {
-  const { data: pendingDeposit } = useReadContract({
+  const { data: pendingDeposit, refetch } = useReadContract({
     ...sectorVaultConfig,
     functionName: "pendingDeposits",
     args: depositId !== undefined ? [depositId] : undefined,
+    query: {
+      refetchInterval: 3000, // Poll every 3 seconds
+    },
   });
 
   return {
     pendingDeposit: pendingDeposit as [string, bigint, boolean, bigint] | undefined,
+    refetch,
   };
 }
 
@@ -161,13 +165,17 @@ export function usePendingDeposit(depositId: bigint | undefined) {
  * Hook to get the next deposit ID (total deposits count)
  */
 export function useNextDepositId() {
-  const { data: nextDepositId } = useReadContract({
+  const { data: nextDepositId, refetch } = useReadContract({
     ...sectorVaultConfig,
     functionName: "nextDepositId",
+    query: {
+      refetchInterval: 3000, // Poll every 3 seconds
+    },
   });
 
   return {
     nextDepositId: nextDepositId as bigint | undefined,
+    refetch,
   };
 }
 

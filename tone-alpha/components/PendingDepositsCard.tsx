@@ -6,7 +6,7 @@ import styles from "./Card.module.css";
 
 export function PendingDepositsCard() {
   const { address, isConnected } = useAccount();
-  const { nextDepositId } = useNextDepositId();
+  const { nextDepositId, refetch: refetchNextDepositId } = useNextDepositId();
 
   if (!isConnected) {
     return (
@@ -24,9 +24,18 @@ export function PendingDepositsCard() {
 
   return (
     <div className={styles.card}>
-      <h2>Pending Deposits</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <h2 style={{ margin: 0 }}>Pending Deposits</h2>
+        <button
+          onClick={() => refetchNextDepositId()}
+          className={styles.maxButton}
+          style={{ padding: "6px 12px", fontSize: "12px" }}
+        >
+          ↻ Refresh
+        </button>
+      </div>
       <p className={styles.description}>
-        Deposits waiting to be fulfilled by the engine
+        Deposits waiting to be fulfilled by the engine (auto-refreshes every 3s)
       </p>
 
       {depositIds.length === 0 ? (
