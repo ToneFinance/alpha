@@ -12,17 +12,22 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+const (
+	// DepositRequested event signature
+	depositRequestedSignature = "0x827893a5f98dbfaba92dbe0bb2cafe8b9fd5573711d9768ce5cd4e2af44601ac"
+)
+
 type EventListener struct {
-	client   *ethclient.Client
-	config   *Config
+	client    *ethclient.Client
+	config    *Config
 	fulfiller *Fulfiller
 	lastBlock uint64
 }
 
 func NewEventListener(client *ethclient.Client, config *Config, fulfiller *Fulfiller) *EventListener {
 	return &EventListener{
-		client:   client,
-		config:   config,
+		client:    client,
+		config:    config,
 		fulfiller: fulfiller,
 		lastBlock: 0,
 	}
@@ -37,16 +42,19 @@ func (l *EventListener) Start(ctx context.Context) error {
 	currentBlock := header.Number.Uint64()
 
 	// Always scan for pending deposits on startup
-	fmt.Printf("🔍 Checking for pending deposits...\n")
+	Logger.Info("Scanning for pending deposits on startup")
 	if err := l.scanHistoricalDeposits(ctx); err != nil {
-		fmt.Printf("⚠️  Warning: error scanning deposits: %v\n", err)
+		Logger.Warn("Error scanning deposits", "error", err)
 	}
 
 	// Set lastBlock to current
 	l.lastBlock = currentBlock
 
-	fmt.Printf("🎯 Starting event listener from block %d\n", l.lastBlock)
-	fmt.Printf("⏰ Polling every %d seconds\n\n", l.config.PollInterval)
+	Logger.Info("Event listener started",
+		"start_block", l.lastBlock,
+		"poll_interval_seconds", l.config.PollInterval,
+		"vault_address", l.config.SectorVault.Hex(),
+	)
 
 	ticker := time.NewTicker(time.Duration(l.config.PollInterval) * time.Second)
 	defer ticker.Stop()
@@ -57,7 +65,7 @@ func (l *EventListener) Start(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if err := l.poll(ctx); err != nil {
-				fmt.Printf("❌ Error polling: %v\n", err)
+				Logger.Error("Polling error", "error", err)
 			}
 		}
 	}
@@ -72,18 +80,21 @@ func (l *EventListener) poll(ctx context.Context) error {
 	currentBlock := header.Number.Uint64()
 
 	if currentBlock <= l.lastBlock {
-		fmt.Printf("⏳ No new blocks (current: %d)\n", currentBlock)
+		Logger.Debug("No new blocks", "current_block", currentBlock)
 		return nil
 	}
 
-	fmt.Printf("🔍 Checking blocks %d to %d\n", l.lastBlock+1, currentBlock)
+	Logger.Debug("Checking block range for events",
+		"from_block", l.lastBlock+1,
+		"to_block", currentBlock,
+	)
 
 	// Query for DepositRequested events
 	query := ethereum.FilterQuery{
 		FromBlock: new(big.Int).SetUint64(l.lastBlock + 1),
 		ToBlock:   new(big.Int).SetUint64(currentBlock),
 		Addresses: []common.Address{l.config.SectorVault},
-		Topics:    [][]common.Hash{{common.HexToHash("0x827893a5f98dbfaba92dbe0bb2cafe8b9fd5573711d9768ce5cd4e2af44601ac")}}, // DepositRequested(address,uint256,uint256,uint256)
+		Topics:    [][]common.Hash{{common.HexToHash(depositRequestedSignature)}},
 	}
 
 	logs, err := l.client.FilterLogs(ctx, query)
@@ -92,12 +103,16 @@ func (l *EventListener) poll(ctx context.Context) error {
 	}
 
 	if len(logs) > 0 {
-		fmt.Printf("📨 Found %d deposit event(s)\n", len(logs))
+		Logger.Info("Deposit events detected", "event_count", len(logs))
 	}
 
 	for _, vLog := range logs {
 		if err := l.handleDepositEvent(ctx, vLog); err != nil {
-			fmt.Printf("❌ Error handling deposit event: %v\n", err)
+			Logger.Error("Error handling deposit event",
+				"block", vLog.BlockNumber,
+				"tx_hash", vLog.TxHash.Hex(),
+				"error", err,
+			)
 		}
 	}
 
@@ -115,6 +130,7 @@ func (l *EventListener) handleDepositEvent(ctx context.Context, vLog types.Log) 
 	}
 
 	depositId := new(big.Int).SetBytes(vLog.Topics[2].Bytes())
+	userAddress := common.BytesToAddress(vLog.Topics[1].Bytes())
 
 	// Parse data (quoteAmount and timestamp)
 	if len(vLog.Data) < 64 {
@@ -123,11 +139,13 @@ func (l *EventListener) handleDepositEvent(ctx context.Context, vLog types.Log) 
 
 	quoteAmount := new(big.Int).SetBytes(vLog.Data[0:32])
 
-	fmt.Printf("\n🆕 New deposit detected!\n")
-	fmt.Printf("   Deposit ID: %s\n", depositId.String())
-	fmt.Printf("   Quote Amount: %s\n", quoteAmount.String())
-	fmt.Printf("   Block: %d\n", vLog.BlockNumber)
-	fmt.Printf("   Tx: %s\n", vLog.TxHash.Hex())
+	Logger.Info("New deposit event received",
+		"deposit_id", depositId.String(),
+		"user", userAddress.Hex(),
+		"quote_amount", quoteAmount.String(),
+		"block", vLog.BlockNumber,
+		"tx_hash", vLog.TxHash.Hex(),
+	)
 
 	// Fulfill the deposit
 	return l.fulfiller.FulfillDeposit(ctx, depositId, quoteAmount)
@@ -141,11 +159,13 @@ func (l *EventListener) scanHistoricalDeposits(ctx context.Context) error {
 	}
 
 	if nextDepositId.Cmp(big.NewInt(0)) == 0 {
-		fmt.Printf("✓ No deposits found\n\n")
+		Logger.Info("No historical deposits found")
 		return nil
 	}
 
-	fmt.Printf("📊 Found %s total deposit(s), checking status...\n", nextDepositId.String())
+	Logger.Info("Scanning historical deposits",
+		"total_deposits", nextDepositId.String(),
+	)
 
 	unfulfilledCount := 0
 	// Check each deposit
@@ -153,7 +173,10 @@ func (l *EventListener) scanHistoricalDeposits(ctx context.Context) error {
 		depositId := big.NewInt(i)
 		deposit, err := l.fulfiller.GetPendingDeposit(ctx, depositId)
 		if err != nil {
-			fmt.Printf("⚠️  Error checking deposit #%d: %v\n", i, err)
+			Logger.Warn("Error checking deposit status",
+				"deposit_id", i,
+				"error", err,
+			)
 			continue
 		}
 
@@ -168,20 +191,27 @@ func (l *EventListener) scanHistoricalDeposits(ctx context.Context) error {
 		}
 
 		unfulfilledCount++
-		fmt.Printf("\n🔔 Found pending deposit #%d\n", i)
-		fmt.Printf("   User: %s\n", deposit.User.Hex())
-		fmt.Printf("   Quote Amount: %s\n", deposit.QuoteAmount.String())
+		Logger.Info("Found pending deposit",
+			"deposit_id", i,
+			"user", deposit.User.Hex(),
+			"quote_amount", deposit.QuoteAmount.String(),
+		)
 
 		// Fulfill it
 		if err := l.fulfiller.FulfillDeposit(ctx, depositId, deposit.QuoteAmount); err != nil {
-			fmt.Printf("❌ Error fulfilling deposit #%d: %v\n", i, err)
+			Logger.Error("Failed to fulfill historical deposit",
+				"deposit_id", i,
+				"error", err,
+			)
 		}
 	}
 
 	if unfulfilledCount == 0 {
-		fmt.Printf("✓ All deposits are fulfilled\n\n")
+		Logger.Info("All historical deposits already fulfilled")
 	} else {
-		fmt.Printf("\n✓ Fulfilled %d pending deposit(s)\n\n", unfulfilledCount)
+		Logger.Info("Historical deposit scan completed",
+			"fulfilled_count", unfulfilledCount,
+		)
 	}
 
 	return nil

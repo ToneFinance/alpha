@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -15,12 +16,21 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+const (
+	// Transaction wait timeout in seconds
+	txWaitTimeout = 60
+	// Post-transaction state sync delay
+	txSyncDelay = 2 * time.Second
+)
+
 type Fulfiller struct {
-	client       *ethclient.Client
-	config       *Config
-	privateKey   *ecdsa.PrivateKey
-	fromAddress  common.Address
-	nonce        *uint64 // Track nonce manually
+	client      *ethclient.Client
+	config      *Config
+	privateKey  *ecdsa.PrivateKey
+	fromAddress common.Address
+	nonce       *uint64        // Track nonce manually
+	wg          sync.WaitGroup // Track in-flight fulfillments
+	mu          sync.Mutex     // Protect nonce access
 }
 
 func NewFulfiller(config *Config) (*Fulfiller, error) {
@@ -42,9 +52,11 @@ func NewFulfiller(config *Config) (*Fulfiller, error) {
 
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 
-	fmt.Printf("✅ Fulfillment engine initialized\n")
-	fmt.Printf("📍 Fulfiller address: %s\n", fromAddress.Hex())
-	fmt.Printf("🏦 Vault address: %s\n", config.SectorVault.Hex())
+	Logger.Info("Fulfillment engine initialized",
+		"fulfiller_address", fromAddress.Hex(),
+		"vault_address", config.SectorVault.Hex(),
+		"rpc_url", config.RPCURL,
+	)
 
 	return &Fulfiller{
 		client:      client,
@@ -56,8 +68,25 @@ func NewFulfiller(config *Config) (*Fulfiller, error) {
 }
 
 func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quoteAmount *big.Int) error {
-	fmt.Printf("\n🔄 Fulfilling deposit #%s\n", depositId.String())
-	fmt.Printf("💵 Quote amount: %s\n", quoteAmount.String())
+	// Track this in-flight operation
+	f.wg.Add(1)
+	defer f.wg.Done()
+
+	// Check if context is already cancelled before starting
+	select {
+	case <-ctx.Done():
+		Logger.Info("Deposit fulfillment cancelled before start",
+			"deposit_id", depositId.String(),
+			"reason", ctx.Err(),
+		)
+		return ctx.Err()
+	default:
+	}
+
+	Logger.Info("Starting deposit fulfillment",
+		"deposit_id", depositId.String(),
+		"quote_amount", quoteAmount.String(),
+	)
 
 	// Calculate underlying amounts based on weights
 	// Weights: 33.33% WETH, 33.33% UNI, 33.34% AAVE
@@ -71,29 +100,56 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 	uniAmount = new(big.Int).Mul(uniAmount, new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil))
 	aaveAmount = new(big.Int).Mul(aaveAmount, new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil))
 
-	fmt.Printf("📊 Underlying amounts:\n")
-	fmt.Printf("  - WETH: %s\n", wethAmount.String())
-	fmt.Printf("  - UNI:  %s\n", uniAmount.String())
-	fmt.Printf("  - AAVE: %s\n", aaveAmount.String())
+	Logger.Debug("Calculated underlying token amounts",
+		"deposit_id", depositId.String(),
+		"weth_amount", wethAmount.String(),
+		"uni_amount", uniAmount.String(),
+		"aave_amount", aaveAmount.String(),
+	)
 
 	// Approve tokens
 	if err := f.approveToken(ctx, f.config.WETH, wethAmount); err != nil {
+		Logger.Error("Failed to approve WETH",
+			"deposit_id", depositId.String(),
+			"token", f.config.WETH.Hex(),
+			"amount", wethAmount.String(),
+			"error", err,
+		)
 		return fmt.Errorf("failed to approve WETH: %v", err)
 	}
 	if err := f.approveToken(ctx, f.config.UNI, uniAmount); err != nil {
+		Logger.Error("Failed to approve UNI",
+			"deposit_id", depositId.String(),
+			"token", f.config.UNI.Hex(),
+			"amount", uniAmount.String(),
+			"error", err,
+		)
 		return fmt.Errorf("failed to approve UNI: %v", err)
 	}
 	if err := f.approveToken(ctx, f.config.AAVE, aaveAmount); err != nil {
+		Logger.Error("Failed to approve AAVE",
+			"deposit_id", depositId.String(),
+			"token", f.config.AAVE.Hex(),
+			"amount", aaveAmount.String(),
+			"error", err,
+		)
 		return fmt.Errorf("failed to approve AAVE: %v", err)
 	}
 
 	// Call fulfillDeposit
 	underlyingAmounts := []*big.Int{wethAmount, uniAmount, aaveAmount}
 	if err := f.callFulfillDeposit(ctx, depositId, underlyingAmounts); err != nil {
+		Logger.Error("Failed to fulfill deposit",
+			"deposit_id", depositId.String(),
+			"error", err,
+		)
 		return fmt.Errorf("failed to call fulfillDeposit: %v", err)
 	}
 
-	fmt.Printf("✅ Deposit #%s fulfilled successfully!\n", depositId.String())
+	Logger.Info("Deposit fulfilled successfully",
+		"deposit_id", depositId.String(),
+		"quote_amount", quoteAmount.String(),
+	)
 	return nil
 }
 
@@ -110,14 +166,26 @@ func (f *Fulfiller) approveToken(ctx context.Context, token common.Address, amou
 		return err
 	}
 
-	fmt.Printf("  ⏳ Approving %s: %s\n", token.Hex()[:8]+"...", tx.Hash().Hex())
+	Logger.Info("Token approval transaction sent",
+		"token", token.Hex(),
+		"amount", amount.String(),
+		"tx_hash", tx.Hash().Hex(),
+	)
 
 	// Wait for transaction to be mined
 	if err := f.waitForTransaction(ctx, tx); err != nil {
+		Logger.Error("Token approval transaction failed",
+			"token", token.Hex(),
+			"tx_hash", tx.Hash().Hex(),
+			"error", err,
+		)
 		return err
 	}
 
-	fmt.Printf("  ✓ Approved %s\n", token.Hex()[:8]+"...")
+	Logger.Debug("Token approval confirmed",
+		"token", token.Hex(),
+		"tx_hash", tx.Hash().Hex(),
+	)
 	return nil
 }
 
@@ -134,40 +202,59 @@ func (f *Fulfiller) callFulfillDeposit(ctx context.Context, depositId *big.Int, 
 		return err
 	}
 
-	fmt.Printf("  ⏳ Fulfilling deposit: %s\n", tx.Hash().Hex())
+	Logger.Info("Fulfill deposit transaction sent",
+		"deposit_id", depositId.String(),
+		"tx_hash", tx.Hash().Hex(),
+	)
 
 	// Wait for transaction to be mined
 	if err := f.waitForTransaction(ctx, tx); err != nil {
+		Logger.Error("Fulfill deposit transaction failed",
+			"deposit_id", depositId.String(),
+			"tx_hash", tx.Hash().Hex(),
+			"error", err,
+		)
 		return err
 	}
 
-	fmt.Printf("  ✓ Deposit fulfilled!\n")
+	Logger.Debug("Fulfill deposit transaction confirmed",
+		"deposit_id", depositId.String(),
+		"tx_hash", tx.Hash().Hex(),
+	)
 	return nil
 }
 
 func (f *Fulfiller) sendTransaction(ctx context.Context, to common.Address, value *big.Int, data []byte) (*types.Transaction, error) {
-	// Get or fetch nonce
+	// Get or fetch nonce (with mutex protection)
+	f.mu.Lock()
 	var nonce uint64
 	if f.nonce == nil {
 		// First transaction - fetch nonce from network
+		f.mu.Unlock() // Unlock while making network call
 		fetchedNonce, err := f.client.PendingNonceAt(ctx, f.fromAddress)
 		if err != nil {
+			Logger.Error("Failed to fetch nonce", "error", err)
 			return nil, err
 		}
+		f.mu.Lock() // Re-lock to update nonce
 		nonce = fetchedNonce
 		f.nonce = &nonce
+		Logger.Debug("Fetched initial nonce", "nonce", nonce)
 	} else {
 		// Use tracked nonce
 		nonce = *f.nonce
 	}
+	f.mu.Unlock()
 
 	gasPrice, err := f.client.SuggestGasPrice(ctx)
 	if err != nil {
+		Logger.Error("Failed to get gas price", "error", err)
 		return nil, err
 	}
 
 	chainID, err := f.client.NetworkID(ctx)
 	if err != nil {
+		Logger.Error("Failed to get network ID", "error", err)
 		return nil, err
 	}
 
@@ -175,6 +262,7 @@ func (f *Fulfiller) sendTransaction(ctx context.Context, to common.Address, valu
 
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), f.privateKey)
 	if err != nil {
+		Logger.Error("Failed to sign transaction", "error", err)
 		return nil, err
 	}
 
@@ -182,28 +270,52 @@ func (f *Fulfiller) sendTransaction(ctx context.Context, to common.Address, valu
 	if err != nil {
 		// Check if it's a nonce error - reset nonce tracker to resync
 		if strings.Contains(err.Error(), "nonce too low") || strings.Contains(err.Error(), "replacement transaction underpriced") {
+			Logger.Warn("Nonce error detected, resetting nonce tracker",
+				"error", err,
+				"nonce", nonce,
+			)
+			f.mu.Lock()
 			f.nonce = nil // Reset to force fresh fetch on next transaction
+			f.mu.Unlock()
 		}
 		return nil, err
 	}
 
 	// Increment nonce for next transaction
+	f.mu.Lock()
 	next := nonce + 1
 	f.nonce = &next
+	f.mu.Unlock()
+
+	Logger.Debug("Transaction sent",
+		"tx_hash", signedTx.Hash().Hex(),
+		"to", to.Hex(),
+		"nonce", nonce,
+		"gas_price", gasPrice.String(),
+	)
 
 	return signedTx, nil
 }
 
 func (f *Fulfiller) waitForTransaction(ctx context.Context, tx *types.Transaction) error {
 	// Wait for transaction to be mined (with simple polling)
-	for i := 0; i < 60; i++ { // Wait up to 60 seconds
+	for i := 0; i < txWaitTimeout; i++ {
 		receipt, err := f.client.TransactionReceipt(ctx, tx.Hash())
 		if err == nil && receipt != nil {
 			if receipt.Status == 0 {
+				Logger.Error("Transaction reverted",
+					"tx_hash", tx.Hash().Hex(),
+					"block", receipt.BlockNumber.Uint64(),
+				)
 				return fmt.Errorf("transaction reverted")
 			}
 			// Transaction successful - add small delay to ensure node state updates
-			time.Sleep(2 * time.Second)
+			Logger.Debug("Transaction mined successfully",
+				"tx_hash", tx.Hash().Hex(),
+				"block", receipt.BlockNumber.Uint64(),
+				"gas_used", receipt.GasUsed,
+			)
+			time.Sleep(txSyncDelay)
 			return nil
 		}
 
@@ -211,6 +323,10 @@ func (f *Fulfiller) waitForTransaction(ctx context.Context, tx *types.Transactio
 		time.Sleep(1 * time.Second)
 	}
 
+	Logger.Error("Transaction timeout",
+		"tx_hash", tx.Hash().Hex(),
+		"timeout_seconds", txWaitTimeout,
+	)
 	return fmt.Errorf("transaction not mined within timeout")
 }
 
@@ -267,6 +383,11 @@ func (f *Fulfiller) GetPendingDeposit(ctx context.Context, depositId *big.Int) (
 	}
 
 	return &deposit, nil
+}
+
+// Wait waits for all in-flight fulfillments to complete
+func (f *Fulfiller) Wait() {
+	f.wg.Wait()
 }
 
 func (f *Fulfiller) Close() {
