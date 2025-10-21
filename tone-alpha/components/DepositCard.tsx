@@ -23,21 +23,26 @@ export function DepositCard() {
   const amountBigInt = amount ? parseTokenAmount(amount, 6) : 0n; // USDC has 6 decimals
   const needsApproval = usdcAllowance !== undefined && amountBigInt > usdcAllowance;
 
+  const hasTriggeredDepositRef = useRef(false);
+
   // Store the deposit amount when approval is initiated
   useEffect(() => {
     if (isApproving && amountBigInt > 0n) {
       depositAmountRef.current = amountBigInt;
+      hasTriggeredDepositRef.current = false;
     }
   }, [isApproving, amountBigInt]);
 
   // Automatically trigger deposit after approval is confirmed
   useEffect(() => {
-    if (isApproved && depositAmountRef.current > 0n) {
+    if (isApproved && depositAmountRef.current > 0n && !hasTriggeredDepositRef.current) {
+      hasTriggeredDepositRef.current = true;
       // Refetch allowance to ensure it's updated
       refetchAll();
       // Trigger deposit after a short delay to ensure state is updated
       const timer = setTimeout(() => {
         deposit(depositAmountRef.current);
+        depositAmountRef.current = 0n;
       }, 500);
       return () => clearTimeout(timer);
     }
