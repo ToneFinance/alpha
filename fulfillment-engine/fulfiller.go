@@ -24,13 +24,16 @@ const (
 )
 
 type Fulfiller struct {
-	client      *ethclient.Client
-	config      *Config
-	privateKey  *ecdsa.PrivateKey
-	fromAddress common.Address
-	nonce       *uint64        // Track nonce manually
-	wg          sync.WaitGroup // Track in-flight fulfillments
-	mu          sync.Mutex     // Protect nonce access
+	client            *ethclient.Client
+	config            *Config
+	privateKey        *ecdsa.PrivateKey
+	fromAddress       common.Address
+	nonce             *uint64                 // Track nonce manually
+	wg                sync.WaitGroup          // Track in-flight fulfillments
+	mu                sync.Mutex              // Protect nonce access
+	underlyingTokens  []common.Address        // Cached underlying tokens
+	underlyingWeights []*big.Int              // Cached underlying weights
+	approvedTokens    map[common.Address]bool // Track which tokens have max approval
 }
 
 func NewFulfiller(config *Config) (*Fulfiller, error) {
@@ -52,19 +55,29 @@ func NewFulfiller(config *Config) (*Fulfiller, error) {
 
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 
+	fulfiller := &Fulfiller{
+		client:         client,
+		config:         config,
+		privateKey:     privateKey,
+		fromAddress:    fromAddress,
+		nonce:          nil, // Will be fetched on first transaction
+		approvedTokens: make(map[common.Address]bool),
+	}
+
+	// Fetch underlying tokens and weights from vault
+	ctx := context.Background()
+	if err := fulfiller.loadUnderlyingTokens(ctx); err != nil {
+		return nil, fmt.Errorf("failed to load underlying tokens: %v", err)
+	}
+
 	Logger.Info("Fulfillment engine initialized",
 		"fulfiller_address", fromAddress.Hex(),
 		"vault_address", config.SectorVault.Hex(),
 		"rpc_url", config.RPCURL,
+		"underlying_tokens", len(fulfiller.underlyingTokens),
 	)
 
-	return &Fulfiller{
-		client:      client,
-		config:      config,
-		privateKey:  privateKey,
-		fromAddress: fromAddress,
-		nonce:       nil, // Will be fetched on first transaction
-	}, nil
+	return fulfiller, nil
 }
 
 func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quoteAmount *big.Int) error {
@@ -88,56 +101,43 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 		"quote_amount", quoteAmount.String(),
 	)
 
-	// Calculate underlying amounts based on weights
-	// Weights: 33.33% WETH, 33.33% UNI, 33.34% AAVE
-	// For simplicity, we'll use the quote amount as the basis
-	wethAmount := new(big.Int).Div(new(big.Int).Mul(quoteAmount, big.NewInt(3333)), big.NewInt(10000))
-	uniAmount := new(big.Int).Div(new(big.Int).Mul(quoteAmount, big.NewInt(3333)), big.NewInt(10000))
-	aaveAmount := new(big.Int).Div(new(big.Int).Mul(quoteAmount, big.NewInt(3334)), big.NewInt(10000))
-
-	// Convert to 18 decimals (underlying tokens have 18 decimals, USDC has 6)
-	wethAmount = new(big.Int).Mul(wethAmount, new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil))
-	uniAmount = new(big.Int).Mul(uniAmount, new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil))
-	aaveAmount = new(big.Int).Mul(aaveAmount, new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil))
-
-	Logger.Debug("Calculated underlying token amounts",
-		"deposit_id", depositId.String(),
-		"weth_amount", wethAmount.String(),
-		"uni_amount", uniAmount.String(),
-		"aave_amount", aaveAmount.String(),
-	)
-
-	// Approve tokens
-	if err := f.approveToken(ctx, f.config.WETH, wethAmount); err != nil {
-		Logger.Error("Failed to approve WETH",
-			"deposit_id", depositId.String(),
-			"token", f.config.WETH.Hex(),
-			"amount", wethAmount.String(),
-			"error", err,
-		)
-		return fmt.Errorf("failed to approve WETH: %v", err)
-	}
-	if err := f.approveToken(ctx, f.config.UNI, uniAmount); err != nil {
-		Logger.Error("Failed to approve UNI",
-			"deposit_id", depositId.String(),
-			"token", f.config.UNI.Hex(),
-			"amount", uniAmount.String(),
-			"error", err,
-		)
-		return fmt.Errorf("failed to approve UNI: %v", err)
-	}
-	if err := f.approveToken(ctx, f.config.AAVE, aaveAmount); err != nil {
-		Logger.Error("Failed to approve AAVE",
-			"deposit_id", depositId.String(),
-			"token", f.config.AAVE.Hex(),
-			"amount", aaveAmount.String(),
-			"error", err,
-		)
-		return fmt.Errorf("failed to approve AAVE: %v", err)
+	// Calculate underlying amounts based on weights from vault
+	// Total weight = sum of all weights (should be 10000 basis points)
+	totalWeight := big.NewInt(0)
+	for _, weight := range f.underlyingWeights {
+		totalWeight = new(big.Int).Add(totalWeight, weight)
 	}
 
-	// Call fulfillDeposit
-	underlyingAmounts := []*big.Int{wethAmount, uniAmount, aaveAmount}
+	underlyingAmounts := make([]*big.Int, len(f.underlyingTokens))
+	decimalMultiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil) // Convert USDC (6 decimals) to 18 decimals
+
+	for i, weight := range f.underlyingWeights {
+		// Calculate: (quoteAmount * weight / totalWeight) * 10^12
+		amount := new(big.Int).Div(new(big.Int).Mul(quoteAmount, weight), totalWeight)
+		amount = new(big.Int).Mul(amount, decimalMultiplier)
+		underlyingAmounts[i] = amount
+
+		Logger.Debug("Calculated underlying token amount",
+			"deposit_id", depositId.String(),
+			"token_index", i,
+			"token", f.underlyingTokens[i].Hex(),
+			"weight", weight.String(),
+			"amount", amount.String(),
+		)
+	}
+
+	// Ensure all tokens have max approval (only approves once per token)
+	for i, token := range f.underlyingTokens {
+		if err := f.ensureTokenApproval(ctx, token); err != nil {
+			Logger.Error("Failed to ensure token approval",
+				"deposit_id", depositId.String(),
+				"token_index", i,
+				"token", token.Hex(),
+				"error", err,
+			)
+			return fmt.Errorf("failed to ensure approval for token %s: %v", token.Hex(), err)
+		}
+	}
 	if err := f.callFulfillDeposit(ctx, depositId, underlyingAmounts); err != nil {
 		Logger.Error("Failed to fulfill deposit",
 			"deposit_id", depositId.String(),
@@ -153,10 +153,22 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 	return nil
 }
 
-func (f *Fulfiller) approveToken(ctx context.Context, token common.Address, amount *big.Int) error {
-	parsedABI, _ := ParseERC20ABI()
+// ensureTokenApproval ensures a token has max approval, only approving once per token
+func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Address) error {
+	// Check if already approved
+	f.mu.Lock()
+	if f.approvedTokens[token] {
+		f.mu.Unlock()
+		return nil
+	}
+	f.mu.Unlock()
 
-	data, err := parsedABI.Pack("approve", f.config.SectorVault, amount)
+	// Approve max uint256 amount
+	maxUint256 := new(big.Int)
+	maxUint256.SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
+	parsedABI, _ := ParseERC20ABI()
+	data, err := parsedABI.Pack("approve", f.config.SectorVault, maxUint256)
 	if err != nil {
 		return err
 	}
@@ -166,9 +178,8 @@ func (f *Fulfiller) approveToken(ctx context.Context, token common.Address, amou
 		return err
 	}
 
-	Logger.Info("Token approval transaction sent",
+	Logger.Info("Max approval transaction sent",
 		"token", token.Hex(),
-		"amount", amount.String(),
 		"tx_hash", tx.Hash().Hex(),
 	)
 
@@ -182,7 +193,12 @@ func (f *Fulfiller) approveToken(ctx context.Context, token common.Address, amou
 		return err
 	}
 
-	Logger.Debug("Token approval confirmed",
+	// Mark as approved
+	f.mu.Lock()
+	f.approvedTokens[token] = true
+	f.mu.Unlock()
+
+	Logger.Info("Max approval confirmed",
 		"token", token.Hex(),
 		"tx_hash", tx.Hash().Hex(),
 	)
@@ -392,4 +408,88 @@ func (f *Fulfiller) Wait() {
 
 func (f *Fulfiller) Close() {
 	f.client.Close()
+}
+
+// loadUnderlyingTokens fetches underlying tokens and weights from the vault
+func (f *Fulfiller) loadUnderlyingTokens(ctx context.Context) error {
+	parsedABI, err := ParseSectorVaultABI()
+	if err != nil {
+		return err
+	}
+
+	// Fetch tokens by index until we get an error (end of array)
+	var tokens []common.Address
+	var weights []*big.Int
+
+	for i := uint64(0); ; i++ {
+		// Try to fetch token at index i
+		tokenData, err := parsedABI.Pack("underlyingTokens", new(big.Int).SetUint64(i))
+		if err != nil {
+			return err
+		}
+
+		tokenResult, err := f.client.CallContract(ctx, ethereum.CallMsg{
+			To:   &f.config.SectorVault,
+			Data: tokenData,
+		}, nil)
+		if err != nil {
+			// End of array reached
+			break
+		}
+
+		var token common.Address
+		err = parsedABI.UnpackIntoInterface(&token, "underlyingTokens", tokenResult)
+		if err != nil {
+			break
+		}
+
+		// Check for zero address (end of valid tokens)
+		if token == (common.Address{}) {
+			break
+		}
+
+		tokens = append(tokens, token)
+
+		// Fetch weight for this token
+		weightData, err := parsedABI.Pack("targetWeights", token)
+		if err != nil {
+			return fmt.Errorf("failed to pack targetWeights for token %s: %v", token.Hex(), err)
+		}
+
+		weightResult, err := f.client.CallContract(ctx, ethereum.CallMsg{
+			To:   &f.config.SectorVault,
+			Data: weightData,
+		}, nil)
+		if err != nil {
+			return fmt.Errorf("failed to call targetWeights for token %s: %v", token.Hex(), err)
+		}
+
+		var weight *big.Int
+		err = parsedABI.UnpackIntoInterface(&weight, "targetWeights", weightResult)
+		if err != nil {
+			return fmt.Errorf("failed to unpack targetWeights for token %s: %v", token.Hex(), err)
+		}
+
+		weights = append(weights, weight)
+	}
+
+	if len(tokens) == 0 {
+		return fmt.Errorf("no underlying tokens found in vault")
+	}
+
+	f.underlyingTokens = tokens
+	f.underlyingWeights = weights
+
+	Logger.Info("Loaded underlying tokens from vault",
+		"token_count", len(tokens),
+	)
+	for i, token := range tokens {
+		Logger.Debug("Underlying token",
+			"index", i,
+			"address", token.Hex(),
+			"weight", weights[i].String(),
+		)
+	}
+
+	return nil
 }

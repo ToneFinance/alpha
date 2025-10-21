@@ -70,6 +70,20 @@ const SectorVaultABI = `[
 		"name": "nextDepositId",
 		"outputs": [{"name": "", "type": "uint256"}],
 		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [{"name": "", "type": "uint256"}],
+		"name": "underlyingTokens",
+		"outputs": [{"name": "", "type": "address"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [{"name": "", "type": "address"}],
+		"name": "targetWeights",
+		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
 	}
 ]`
 

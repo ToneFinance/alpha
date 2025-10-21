@@ -14,9 +14,6 @@ type Config struct {
 	PrivateKey      string
 	RPCURL          string
 	SectorVault     common.Address
-	WETH            common.Address
-	UNI             common.Address
-	AAVE            common.Address
 	PollInterval    int
 	LogLevel        string
 	LogFormat       string
@@ -40,14 +37,6 @@ func LoadConfig() (*Config, error) {
 	sectorVault := os.Getenv("SECTOR_VAULT")
 	if sectorVault == "" {
 		return nil, fmt.Errorf("SECTOR_VAULT not set")
-	}
-
-	weth := os.Getenv("WETH")
-	uni := os.Getenv("UNI")
-	aave := os.Getenv("AAVE")
-
-	if weth == "" || uni == "" || aave == "" {
-		return nil, fmt.Errorf("underlying token addresses not set")
 	}
 
 	pollIntervalStr := os.Getenv("POLL_INTERVAL")
@@ -81,9 +70,6 @@ func LoadConfig() (*Config, error) {
 		PrivateKey:      privateKey,
 		RPCURL:          rpcURL,
 		SectorVault:     common.HexToAddress(sectorVault),
-		WETH:            common.HexToAddress(weth),
-		UNI:             common.HexToAddress(uni),
-		AAVE:            common.HexToAddress(aave),
 		PollInterval:    pollInterval,
 		LogLevel:        logLevel,
 		LogFormat:       logFormat,
