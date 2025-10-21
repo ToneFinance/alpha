@@ -5,8 +5,9 @@ A simple Go-based fulfillment engine for the TONE Finance sector vault. Listens 
 ## Features
 
 - ✅ Listens for `DepositRequested` events from the SectorVault contract
+- ✅ **Dynamically fetches** underlying tokens and weights from the vault
 - ✅ Automatically calculates underlying token amounts based on basket weights
-- ✅ Approves and transfers underlying tokens (WETH, UNI, AAVE)
+- ✅ Approves and transfers underlying tokens to the vault
 - ✅ Calls `fulfillDeposit` on the vault contract
 - ✅ **Automatic pending deposit handling** - checks and fulfills any pending deposits on startup
 - ✅ Block-based polling (no websocket dependencies)
@@ -17,7 +18,7 @@ A simple Go-based fulfillment engine for the TONE Finance sector vault. Listens 
 - Go 1.21 or higher
 - Private key with:
   - Base Sepolia ETH for gas
-  - Sufficient underlying tokens (WETH, UNI, AAVE)
+  - Sufficient underlying tokens (fetched automatically from vault)
   - Fulfillment role on the SectorVault contract
 
 ## Setup
@@ -46,11 +47,9 @@ PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE
 # Base Sepolia RPC (default is fine)
 RPC_URL=https://sepolia.base.org
 
-# Contract addresses (already configured from deployment)
-SECTOR_VAULT=0x496c491D1E4fc8E563B212b143106732404D9CeE
-WETH=0x12CF3cc4cCD61926DF90A3D127919aE34da9fab4
-UNI=0x5C37E9c6b7abdd265047A3c6ed44AcE4c09F84c2
-AAVE=0x2243c9B20CB8715c14800C58001C19f0d3846560
+# Sector Vault contract address
+# Underlying tokens and weights are fetched automatically from the vault
+SECTOR_VAULT=0xYOUR_VAULT_ADDRESS_HERE
 
 # Polling interval in seconds (12 seconds = ~1 block on Base)
 POLL_INTERVAL=12
@@ -61,19 +60,21 @@ POLL_INTERVAL=12
 Your fulfiller wallet needs:
 
 ```bash
-# Check your balances
+# Check ETH balance
 cast balance YOUR_ADDRESS --rpc-url https://sepolia.base.org
 
-# Check token balances
-cast call 0x12CF3cc4cCD61926DF90A3D127919aE34da9fab4 "balanceOf(address)(uint256)" YOUR_ADDRESS --rpc-url https://sepolia.base.org
+# Check token balances (replace TOKEN_ADDRESS with actual token addresses from vault)
+cast call TOKEN_ADDRESS "balanceOf(address)(uint256)" YOUR_ADDRESS --rpc-url https://sepolia.base.org
 ```
 
-If you need tokens, the deployer has minted 11M of each token. You can transfer some:
+**Note**: The fulfillment engine automatically detects which tokens are needed from the vault configuration. Ensure your wallet has sufficient balance of all underlying tokens in the basket.
+
+If you need tokens and you're the deployer, you can transfer from the deployment wallet:
 
 ```bash
 # From the contract directory
 source .env
-cast send 0x12CF3cc4cCD61926DF90A3D127919aE34da9fab4 "transfer(address,uint256)" YOUR_FULFILLER_ADDRESS 1000000000000000000000000 --rpc-url https://sepolia.base.org --private-key $PRIVATE_KEY
+cast send TOKEN_ADDRESS "transfer(address,uint256)" YOUR_FULFILLER_ADDRESS AMOUNT --rpc-url https://sepolia.base.org --private-key $PRIVATE_KEY
 ```
 
 ## Running the Engine
@@ -109,11 +110,8 @@ go build -o fulfillment-engine
 
 ### For Each Deposit
 
-3. **Token Calculation**: Calculates underlying token amounts based on basket weights:
-   - WETH: 33.33%
-   - UNI: 33.33%
-   - AAVE: 33.34%
-4. **Approval**: Approves each underlying token for the vault to spend
+3. **Token Calculation**: Calculates underlying token amounts based on basket weights fetched from the vault
+4. **Approval**: Approves each underlying token for the vault to spend (once per token with max approval)
 5. **Fulfillment**: Calls `fulfillDeposit()` with the calculated amounts
 6. **Confirmation**: Waits for transaction confirmation and logs success
 
@@ -136,13 +134,10 @@ go build -o fulfillment-engine
 
 🔄 Fulfilling deposit #1
 💵 Quote amount: 10000000
-📊 Underlying amounts:
-  - WETH: 3333000000000000000
-  - UNI:  3333000000000000000
-  - AAVE: 3334000000000000000
-  ✓ Approved 0x12CF3c...: 0x123...
-  ✓ Approved 0x5C37E9...: 0x456...
-  ✓ Approved 0x2243c9...: 0x789...
+📊 Underlying amounts calculated based on vault basket
+  ✓ Approved token 0x12CF3c...: 0x123...
+  ✓ Approved token 0x5C37E9...: 0x456...
+  ✓ Approved token 0x2243c9...: 0x789...
   ✓ Fulfilled deposit: 0xabc...123
 ✅ Deposit #1 fulfilled successfully!
 
@@ -157,14 +152,13 @@ go build -o fulfillment-engine
 
 ## Configuration
 
-### Basket Weights
+### Dynamic Basket Configuration
 
-Current implementation uses fixed weights:
-- WETH: 3333 basis points (33.33%)
-- UNI: 3333 basis points (33.33%)
-- AAVE: 3334 basis points (33.34%)
+The fulfillment engine **automatically fetches** the basket configuration from the vault on startup:
+- Underlying token addresses
+- Target weights for each token (in basis points, sum = 10000)
 
-These match the vault's target weights and are hardcoded in `fulfiller.go`.
+This means the engine adapts to any vault configuration without code changes. When you update the basket in the vault, simply restart the fulfillment engine to pick up the new configuration.
 
 ### Polling Interval
 
@@ -196,7 +190,7 @@ Make sure your `.env` file exists and contains `PRIVATE_KEY` with the `0x` prefi
 Ensure your private key is valid and starts with `0x`.
 
 ### "Insufficient funds"
-Your fulfiller wallet needs Base Sepolia ETH for gas and underlying tokens (WETH, UNI, AAVE).
+Your fulfiller wallet needs Base Sepolia ETH for gas and sufficient balance of all underlying tokens in the vault's basket.
 
 ### "Transaction failed"
 Check that:

@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
 import {SectorVault} from "../src/SectorVault.sol";
+import {MockOracle} from "../src/MockOracle.sol";
 
 /**
  * @title DeploySectorVault
@@ -32,40 +33,34 @@ contract DeploySectorVault is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // For alpha/demo, we'll deploy mock underlying tokens
-        // In production, these would be actual DeFi protocol tokens
-        MockToken token1 = new MockToken("Wrapped ETH", "WETH");
-        MockToken token2 = new MockToken("Uniswap", "UNI");
-        MockToken token3 = new MockToken("Aave", "AAVE");
+        // Deploy mock AI tokens and setup basket
+        (address[] memory underlyingTokens, uint256[] memory targetWeights) = _deployAiTokens();
 
-        console.log("Mock Token 1 (WETH) deployed at:", address(token1));
-        console.log("Mock Token 2 (UNI) deployed at:", address(token2));
-        console.log("Mock Token 3 (AAVE) deployed at:", address(token3));
+        // Deploy mock oracle
+        MockOracle oracle = new MockOracle();
+        console.log("MockOracle deployed at:", address(oracle));
 
-        // Set up basket composition
-        address[] memory underlyingTokens = new address[](3);
-        underlyingTokens[0] = address(token1);
-        underlyingTokens[1] = address(token2);
-        underlyingTokens[2] = address(token3);
-
-        // Equal weights: 33.33%, 33.33%, 33.34%
-        uint256[] memory targetWeights = new uint256[](3);
-        targetWeights[0] = 3333;
-        targetWeights[1] = 3333;
-        targetWeights[2] = 3334;
+        // Set all token prices to 1 USDC (1000000 with 6 decimals)
+        uint256[] memory prices = new uint256[](underlyingTokens.length);
+        for (uint256 i = 0; i < underlyingTokens.length; i++) {
+            prices[i] = 1_000_000; // $1.00 in 6 decimals
+        }
+        oracle.setPrices(underlyingTokens, prices);
+        console.log("Set all token prices to $1.00");
 
         // Deploy vault
         SectorVault vault = new SectorVault(
             USDC_BASE_SEPOLIA,
-            "DeFi Blue Chip Sector",
-            "DEFI",
+            "AI Sector",
+            "AI",
             underlyingTokens,
             targetWeights,
-            fulfillmentEngine // fulfillment role
+            fulfillmentEngine, // fulfillment role
+            address(oracle) // oracle
         );
 
         console.log("SectorVault deployed at:", address(vault));
-        console.log("SectorToken deployed at:", address(vault.sectorToken()));
+        console.log("SectorToken deployed at:", address(vault.SECTOR_TOKEN()));
         console.log("Quote token (USDC):", USDC_BASE_SEPOLIA);
         console.log("Fulfillment role set to:", fulfillmentEngine);
 
@@ -74,28 +69,75 @@ contract DeploySectorVault is Script {
 
         // Transfer tokens to fulfillment engine if it's different from deployer
         if (fulfillmentEngine != deployer) {
-            uint256 transferAmount = 500_000 * 10 ** 18; // 500k tokens
-
-            console.log("\n=== Transferring tokens to fulfillment engine ===");
-            require(token1.transfer(fulfillmentEngine, transferAmount), "WETH transfer failed");
-            console.log("Transferred 500k WETH to fulfillment engine");
-
-            require(token2.transfer(fulfillmentEngine, transferAmount), "UNI transfer failed");
-            console.log("Transferred 500k UNI to fulfillment engine");
-
-            require(token3.transfer(fulfillmentEngine, transferAmount), "AAVE transfer failed");
-            console.log("Transferred 500k AAVE to fulfillment engine");
+            _transferTokensToFulfillmentEngine(underlyingTokens, fulfillmentEngine);
         }
 
         console.log("\n=== Deployment Complete ===");
         console.log("Vault Address:", address(vault));
-        console.log("Sector Token Address:", address(vault.sectorToken()));
+        console.log("Sector Token Address:", address(vault.SECTOR_TOKEN()));
         console.log("\nNext steps:");
         console.log("1. Ensure fulfillment engine has underlying tokens");
         console.log("2. Test deposit flow with a small amount");
         console.log("3. Monitor fulfillment engine logs");
 
         vm.stopBroadcast();
+    }
+
+    function _deployAiTokens() internal returns (address[] memory, uint256[] memory) {
+        // For alpha/demo, we'll deploy mock underlying tokens
+        // In production, these would be actual AI protocol tokens
+        address[] memory tokens = new address[](10);
+
+        tokens[0] = address(new MockToken("0x0", "0X0"));
+        console.log("Mock Token 1 (0X0) deployed at:", tokens[0]);
+
+        tokens[1] = address(new MockToken("Arkham", "ARKM"));
+        console.log("Mock Token 2 (ARKM) deployed at:", tokens[1]);
+
+        tokens[2] = address(new MockToken("Fetch.ai", "FET"));
+        console.log("Mock Token 3 (FET) deployed at:", tokens[2]);
+
+        tokens[3] = address(new MockToken("Kaito", "KAITO"));
+        console.log("Mock Token 4 (KAITO) deployed at:", tokens[3]);
+
+        tokens[4] = address(new MockToken("NEAR Protocol", "NEAR"));
+        console.log("Mock Token 5 (NEAR) deployed at:", tokens[4]);
+
+        tokens[5] = address(new MockToken("Nosana", "NOS"));
+        console.log("Mock Token 6 (NOS) deployed at:", tokens[5]);
+
+        tokens[6] = address(new MockToken("PAAL AI", "PAAL"));
+        console.log("Mock Token 7 (PAAL) deployed at:", tokens[6]);
+
+        tokens[7] = address(new MockToken("Render", "RENDER"));
+        console.log("Mock Token 8 (RENDER) deployed at:", tokens[7]);
+
+        tokens[8] = address(new MockToken("Bittensor", "TAO"));
+        console.log("Mock Token 9 (TAO) deployed at:", tokens[8]);
+
+        tokens[9] = address(new MockToken("Virtual Protocol", "VIRTUAL"));
+        console.log("Mock Token 10 (VIRTUAL) deployed at:", tokens[9]);
+
+        // Equal weights: 10% each (1000 basis points each = 10000 total)
+        uint256[] memory weights = new uint256[](10);
+        for (uint256 i = 0; i < 10; i++) {
+            weights[i] = 1000;
+        }
+
+        return (tokens, weights);
+    }
+
+    function _transferTokensToFulfillmentEngine(address[] memory tokens, address fulfillmentEngine) internal {
+        uint256 transferAmount = 500_000 * 10 ** 18; // 500k tokens
+        string[10] memory symbols = ["0X0", "ARKM", "FET", "KAITO", "NEAR", "NOS", "PAAL", "RENDER", "TAO", "VIRTUAL"];
+
+        console.log("\n=== Transferring tokens to fulfillment engine ===");
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            MockToken token = MockToken(tokens[i]);
+            require(token.transfer(fulfillmentEngine, transferAmount), string.concat(symbols[i], " transfer failed"));
+            console.log(string.concat("Transferred 500k ", symbols[i], " to fulfillment engine"));
+        }
     }
 }
 

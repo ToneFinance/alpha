@@ -10,14 +10,17 @@ TONE Finance allows users to invest in sector baskets by depositing a quote toke
 
 ### Contracts
 
-- **SectorVault.sol**: Main vault managing deposits, fulfillment, and withdrawals
+- **SectorVault.sol**: Main vault managing deposits, fulfillment, withdrawals, and NAV calculation
 - **SectorToken.sol**: ERC20 token representing shares in a sector vault
+- **MockOracle.sol**: Price oracle for testing (implements IPriceOracle interface)
+- **IPriceOracle.sol**: Interface for price oracles (supports Chainlink, Pyth, etc.)
 
 ### Flow
 
 1. **Deposit**: User deposits USDC → Vault creates pending deposit → Emits event
-2. **Fulfillment**: Offchain engine buys underlying tokens → Calls `fulfillDeposit()` → User receives sector tokens
-3. **Withdrawal**: User burns sector tokens → Receives proportional underlying tokens
+2. **Fulfillment**: Offchain engine buys underlying tokens → Calls `fulfillDeposit()` → Vault calculates shares using NAV → User receives sector tokens → Deposit record cleaned up
+3. **Withdrawal**: User burns sector tokens → Receives proportional underlying tokens based on current holdings
+4. **NAV Calculation**: Oracle provides real-time prices → Vault calculates total value of holdings → Used for fair share pricing
 
 ## Setup
 
@@ -72,11 +75,12 @@ forge script script/DeploySectorVault.s.sol:DeploySectorVault \
   --verify
 
 # Deployment will:
-# 1. Deploy SectorVault and SectorToken contracts
-# 2. Deploy 3 mock ERC20 tokens (WETH, UNI, AAVE)
-# 3. Mint 1M tokens of each to the deployer
-# 4. If FULFILLMENT_ENGINE is set in .env, transfer 500k of each token to it
-# 5. Output all contract addresses
+# 1. Deploy 10 mock AI sector tokens (0X0, ARKM, FET, KAITO, NEAR, NOS, PAAL, RENDER, TAO, VIRTUAL)
+# 2. Deploy MockOracle and set all token prices to $1.00
+# 3. Deploy SectorVault and SectorToken contracts with oracle integration
+# 4. Mint 1M tokens of each to the deployer
+# 5. If FULFILLMENT_ENGINE is set in .env, transfer 500k of each token to it
+# 6. Output all contract addresses including oracle
 ```
 
 ### Verify Contracts (if not auto-verified)
@@ -133,11 +137,65 @@ vault.fulfillDeposit(depositId, amounts);
 // Update fulfillment role
 vault.setFulfillmentRole(newAddress);
 
+// Update price oracle (e.g., switch from MockOracle to Chainlink)
+vault.setOracle(newOracleAddress);
+
 // Update basket composition
 address[] memory newTokens = [token1, token2];
 uint256[] memory newWeights = [5000, 5000]; // 50% each
 vault.updateBasket(newTokens, newWeights);
 ```
+
+### For Oracle Management
+
+```solidity
+// Update token prices in MockOracle (testing only)
+mockOracle.setPrice(tokenAddress, priceInUSDC); // Price with 6 decimals
+
+// Batch update prices
+address[] memory tokens = [token1, token2, token3];
+uint256[] memory prices = [1_000_000, 2_000_000, 500_000]; // $1, $2, $0.50
+mockOracle.setPrices(tokens, prices);
+
+// Check current NAV
+uint256 totalValue = vault.getTotalValue(); // Returns value in USDC (6 decimals)
+```
+
+## NAV (Net Asset Value) Calculation
+
+The vault uses oracle-based NAV calculation for fair share pricing:
+
+### How It Works
+
+1. **Total Value Calculation**:
+   ```solidity
+   // For each token in the basket:
+   value = tokenBalance * oraclePrice
+   totalNAV = sum(all token values)
+   ```
+
+2. **Share Calculation** (on deposit):
+   ```solidity
+   // First deposit: 1:1 ratio
+   if (totalShares == 0) return depositAmount;
+
+   // Subsequent deposits: proportional to NAV
+   shares = (depositAmount * totalShares) / totalNAV
+   ```
+
+3. **Example**:
+   - Vault holds: 400 TK1, 300 TK2, 300 TK3
+   - Oracle prices: TK1=$2, TK2=$2, TK3=$2
+   - Total NAV = (400×$2) + (300×$2) + (300×$2) = $2000
+   - User deposits $1000 USDC
+   - If 1000 shares exist: `shares = (1000 * 1000) / 2000 = 500 shares`
+
+### Benefits
+
+✅ **Fair pricing**: New depositors pay market price
+✅ **No dilution**: Existing shareholders maintain proportional value
+✅ **Real-time**: NAV updates immediately when oracle prices change
+✅ **Transparent**: On-chain calculation using verifiable oracle data
 
 ## Contract Addresses (Base Sepolia)
 
@@ -145,24 +203,33 @@ vault.updateBasket(newTokens, newWeights);
 
 - **SectorVault**: `TBD`
 - **SectorToken**: `TBD`
+- **MockOracle**: `TBD`
 - **Quote Token (USDC)**: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+- **AI Sector Tokens**: 10 mock tokens (0X0, ARKM, FET, KAITO, NEAR, NOS, PAAL, RENDER, TAO, VIRTUAL)
 
 ## Key Features (Alpha)
 
 ✅ Two-step deposit flow with offchain fulfillment
+✅ **NAV-based share calculation using oracle prices**
+✅ **Mock oracle for testing (upgradeable to Chainlink/Pyth)**
+✅ **Dynamic price discovery - NAV updates with market prices**
 ✅ Proportional withdrawals of underlying tokens
 ✅ Multiple sector vaults support
 ✅ Access control for fulfillment role
-✅ Basket composition updates
-✅ Deposit cancellation
+✅ Basket composition updates (add/remove tokens)
+✅ Deposit cancellation with refunds
+✅ **Automatic deposit cleanup (prevents unbounded storage growth)**
+✅ **Settable oracle (can upgrade without redeploying vault)**
+✅ Generic oracle interface (IPriceOracle) for easy integration
 
 ## Limitations (Alpha)
 
-- No price oracles (assumes fixed ratios)
+- Uses MockOracle (not production-ready, needs Chainlink/Pyth integration)
 - No rebalancing mechanism
-- No fees
+- No fees or management charges
 - No deposit caps/limits
-- Simplified share calculation
+- No slippage protection on fulfillment
+- No emergency pause mechanism
 
 ## Security
 
@@ -171,12 +238,16 @@ vault.updateBasket(newTokens, newWeights);
 ### Recommendations for Production
 
 - [ ] Full smart contract audit
-- [ ] Price oracle integration (Chainlink, Pyth)
-- [ ] Timelock for admin functions
-- [ ] Emergency pause mechanism
-- [ ] Slippage protection
-- [ ] Gas optimizations
+- [x] Price oracle interface (IPriceOracle) - ✅ Implemented
+- [ ] Replace MockOracle with production oracle (Chainlink, Pyth, or custom aggregator)
+- [ ] Timelock for admin functions (setOracle, updateBasket)
+- [ ] Emergency pause mechanism (circuit breaker)
+- [ ] Slippage protection on deposits/withdrawals
+- [ ] Fee mechanism for sustainability
+- [ ] Gas optimizations review
 - [ ] Formal verification
+- [ ] Multi-sig ownership for critical functions
+- [ ] Rate limiting on oracle updates
 
 ## Development
 
@@ -184,13 +255,16 @@ vault.updateBasket(newTokens, newWeights);
 
 ```
 ├── src/
-│   ├── SectorVault.sol      # Main vault contract
-│   └── SectorToken.sol      # Sector token (ERC20)
+│   ├── SectorVault.sol           # Main vault contract with NAV calculation
+│   ├── SectorToken.sol           # Sector token (ERC20)
+│   ├── MockOracle.sol            # Mock price oracle for testing
+│   └── interfaces/
+│       └── IPriceOracle.sol      # Generic oracle interface
 ├── script/
-│   └── DeploySectorVault.s.sol  # Deployment script
+│   └── DeploySectorVault.s.sol   # Deployment script (AI sector)
 ├── test/
-│   └── SectorVault.t.sol    # Comprehensive tests
-└── foundry.toml             # Foundry config
+│   └── SectorVault.t.sol         # Comprehensive tests (16 test cases)
+└── foundry.toml                  # Foundry config
 ```
 
 ### Adding New Tests
@@ -212,7 +286,10 @@ contract YourTest is Test {
 
 1. **"Invalid weights" error**: Ensure target weights sum to exactly 10000 (100%)
 2. **"Unauthorized fulfillment"**: Only the fulfillment role can call `fulfillDeposit()`
-3. **Transaction fails**: Check token approvals and balances
+3. **"Invalid price" error**: Ensure all tokens have prices set in the oracle before depositing
+4. **Transaction fails**: Check token approvals and balances
+5. **Incorrect share calculation**: Verify oracle prices are set correctly (6 decimals for USDC)
+6. **NAV is zero**: Set prices in MockOracle using `setPrice()` or `setPrices()`
 
 ### Gas Estimation
 

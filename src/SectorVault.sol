@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./SectorToken.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SectorToken} from "./SectorToken.sol";
+import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 
 /**
  * @title SectorVault
@@ -17,10 +18,13 @@ contract SectorVault is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     /// @notice The sector token representing shares in this vault
-    SectorToken public immutable sectorToken;
+    SectorToken public immutable SECTOR_TOKEN;
 
     /// @notice The quote token used for deposits (e.g., USDC)
-    IERC20 public immutable quoteToken;
+    IERC20 public immutable QUOTE_TOKEN;
+
+    /// @notice Oracle for token price feeds
+    IPriceOracle public oracle;
 
     /// @notice Array of underlying tokens that make up the sector basket
     address[] public underlyingTokens;
@@ -58,6 +62,8 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
     event BasketUpdated(address[] tokens, uint256[] weights);
 
+    event OracleUpdated(address indexed oldOracle, address indexed newOracle);
+
     // Errors
     error InvalidAddress();
     error InvalidAmount();
@@ -76,6 +82,7 @@ contract SectorVault is Ownable, ReentrancyGuard {
      * @param _underlyingTokens Array of underlying token addresses
      * @param _targetWeights Array of target weights (in basis points, sum = 10000)
      * @param _fulfillmentRole Address authorized to fulfill deposits
+     * @param _oracle Address of the price oracle
      */
     constructor(
         address _quoteToken,
@@ -83,10 +90,12 @@ contract SectorVault is Ownable, ReentrancyGuard {
         string memory _sectorSymbol,
         address[] memory _underlyingTokens,
         uint256[] memory _targetWeights,
-        address _fulfillmentRole
+        address _fulfillmentRole,
+        address _oracle
     ) Ownable(msg.sender) {
         if (_quoteToken == address(0)) revert InvalidAddress();
         if (_fulfillmentRole == address(0)) revert InvalidAddress();
+        if (_oracle == address(0)) revert InvalidAddress();
         if (_underlyingTokens.length == 0) revert EmptyBasket();
         if (_underlyingTokens.length != _targetWeights.length) revert InvalidWeights();
 
@@ -99,12 +108,13 @@ contract SectorVault is Ownable, ReentrancyGuard {
         }
         if (totalWeight != 10000) revert InvalidWeights();
 
-        quoteToken = IERC20(_quoteToken);
+        QUOTE_TOKEN = IERC20(_quoteToken);
+        oracle = IPriceOracle(_oracle);
         underlyingTokens = _underlyingTokens;
         fulfillmentRole = _fulfillmentRole;
 
         // Deploy sector token with this vault as owner
-        sectorToken = new SectorToken(_sectorName, _sectorSymbol, address(this));
+        SECTOR_TOKEN = new SectorToken(_sectorName, _sectorSymbol, address(this));
 
         emit BasketUpdated(_underlyingTokens, _targetWeights);
         emit FulfillmentRoleUpdated(address(0), _fulfillmentRole);
@@ -119,7 +129,7 @@ contract SectorVault is Ownable, ReentrancyGuard {
         if (quoteAmount == 0) revert InvalidAmount();
 
         // Transfer quote tokens from user
-        quoteToken.safeTransferFrom(msg.sender, address(this), quoteAmount);
+        QUOTE_TOKEN.safeTransferFrom(msg.sender, address(this), quoteAmount);
 
         // Create pending deposit
         depositId = nextDepositId++;
@@ -146,6 +156,10 @@ contract SectorVault is Ownable, ReentrancyGuard {
         // Mark as fulfilled
         pendingDeposit.fulfilled = true;
 
+        // Calculate shares to mint BEFORE transferring tokens
+        // This ensures NAV calculation doesn't include the new deposit
+        uint256 sharesToMint = calculateShares(pendingDeposit.quoteAmount);
+
         // Transfer underlying tokens from fulfiller to vault
         for (uint256 i = 0; i < underlyingTokens.length; i++) {
             if (underlyingAmounts[i] > 0) {
@@ -153,15 +167,13 @@ contract SectorVault is Ownable, ReentrancyGuard {
             }
         }
 
-        // Calculate shares to mint
-        // For simplicity in alpha: use quote amount as share amount (1:1 for first deposit)
-        // In production, calculate based on total value
-        uint256 sharesToMint = calculateShares(pendingDeposit.quoteAmount);
-
         // Mint sector tokens to user
-        sectorToken.mint(pendingDeposit.user, sharesToMint);
+        SECTOR_TOKEN.mint(pendingDeposit.user, sharesToMint);
 
         emit DepositFulfilled(pendingDeposit.user, depositId, sharesToMint, block.timestamp);
+
+        // Clean up: delete the deposit to save storage
+        delete pendingDeposits[depositId];
     }
 
     /**
@@ -183,9 +195,12 @@ contract SectorVault is Ownable, ReentrancyGuard {
         pendingDeposit.fulfilled = true;
 
         // Return quote tokens to user
-        quoteToken.safeTransfer(user, quoteAmount);
+        QUOTE_TOKEN.safeTransfer(user, quoteAmount);
 
         emit DepositCancelled(user, depositId, quoteAmount);
+
+        // Clean up: delete the deposit to save storage
+        delete pendingDeposits[depositId];
     }
 
     /**
@@ -194,10 +209,10 @@ contract SectorVault is Ownable, ReentrancyGuard {
      */
     function withdraw(uint256 sharesAmount) external nonReentrant {
         if (sharesAmount == 0) revert InvalidAmount();
-        if (sectorToken.balanceOf(msg.sender) < sharesAmount) revert InsufficientShares();
+        if (SECTOR_TOKEN.balanceOf(msg.sender) < sharesAmount) revert InsufficientShares();
 
         // Calculate proportional share of underlying tokens
-        uint256 totalShares = sectorToken.totalSupply();
+        uint256 totalShares = SECTOR_TOKEN.totalSupply();
         address[] memory tokens = new address[](underlyingTokens.length);
         uint256[] memory amounts = new uint256[](underlyingTokens.length);
 
@@ -212,29 +227,55 @@ contract SectorVault is Ownable, ReentrancyGuard {
         }
 
         // Burn sector tokens
-        sectorToken.burn(msg.sender, sharesAmount);
+        SECTOR_TOKEN.burn(msg.sender, sharesAmount);
 
         emit Withdrawal(msg.sender, sharesAmount, tokens, amounts);
     }
 
     /**
      * @notice Calculate shares to mint for a given quote amount
-     * @dev Simplified for alpha: 1:1 ratio if vault is empty, otherwise proportional to total value
-     * @param quoteAmount Amount of quote tokens deposited
-     * @return shares Amount of shares to mint
+     * @dev Uses NAV (Net Asset Value) calculation with oracle prices
+     * @param quoteAmount Amount of quote tokens deposited (18 decimals)
+     * @return shares Amount of shares to mint (18 decimals)
      */
     function calculateShares(uint256 quoteAmount) public view returns (uint256 shares) {
-        uint256 totalShares = sectorToken.totalSupply();
+        uint256 totalShares = SECTOR_TOKEN.totalSupply();
 
         // First deposit: 1:1 ratio
         if (totalShares == 0) {
             return quoteAmount;
         }
 
-        // Subsequent deposits: maintain proportional share
-        // In alpha, we use simple 1:1 ratio
-        // In production, this would use oracle prices to calculate total vault value
-        return quoteAmount;
+        // Calculate NAV: total value of all underlying tokens in vault (6 decimals USDC)
+        uint256 totalValue = getTotalValue();
+
+        // Subsequent deposits: shares = (quoteAmount * totalShares) / totalValue
+        // This maintains proportional ownership
+        if (totalValue == 0) {
+            // If vault has shares but no value, treat as first deposit
+            return quoteAmount;
+        }
+
+        // Normalize: quoteAmount is 18 decimals, totalValue is 6 decimals
+        // Convert quoteAmount to 6 decimals to match totalValue
+        uint256 quoteAmountNormalized = quoteAmount / 1e12; // 18 decimals -> 6 decimals
+
+        return (quoteAmountNormalized * totalShares) / totalValue;
+    }
+
+    /**
+     * @notice Get total value of all underlying tokens in the vault (in USDC)
+     * @return totalValue Total value in USDC (with 6 decimals)
+     */
+    function getTotalValue() public view returns (uint256 totalValue) {
+        for (uint256 i = 0; i < underlyingTokens.length; i++) {
+            address token = underlyingTokens[i];
+            uint256 balance = IERC20(token).balanceOf(address(this));
+            if (balance > 0) {
+                totalValue += oracle.getValue(token, balance);
+            }
+        }
+        return totalValue;
     }
 
     /**
@@ -246,6 +287,17 @@ contract SectorVault is Ownable, ReentrancyGuard {
         address oldRole = fulfillmentRole;
         fulfillmentRole = newRole;
         emit FulfillmentRoleUpdated(oldRole, newRole);
+    }
+
+    /**
+     * @notice Update the price oracle
+     * @param newOracle Address of the new price oracle
+     */
+    function setOracle(address newOracle) external onlyOwner {
+        if (newOracle == address(0)) revert InvalidAddress();
+        address oldOracle = address(oracle);
+        oracle = IPriceOracle(newOracle);
+        emit OracleUpdated(oldOracle, newOracle);
     }
 
     /**

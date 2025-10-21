@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {SectorVault} from "../src/SectorVault.sol";
 import {SectorToken} from "../src/SectorToken.sol";
+import {MockOracle} from "../src/MockOracle.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Mock ERC20 token for testing
@@ -20,6 +21,7 @@ contract MockERC20 is ERC20 {
 contract SectorVaultTest is Test {
     SectorVault public vault;
     SectorToken public sectorToken;
+    MockOracle public oracle;
     MockERC20 public usdc;
     MockERC20 public token1;
     MockERC20 public token2;
@@ -53,10 +55,18 @@ contract SectorVaultTest is Test {
         targetWeights.push(3000); // 30%
         targetWeights.push(3000); // 30%
 
-        // Deploy vault
-        vault = new SectorVault(address(usdc), "DeFi Sector Token", "DEFI", underlyingTokens, targetWeights, fulfiller);
+        // Deploy oracle and set prices to $1.00 (1000000 with 6 decimals)
+        oracle = new MockOracle();
+        oracle.setPrice(address(token1), 1_000_000);
+        oracle.setPrice(address(token2), 1_000_000);
+        oracle.setPrice(address(token3), 1_000_000);
 
-        sectorToken = vault.sectorToken();
+        // Deploy vault
+        vault = new SectorVault(
+            address(usdc), "DeFi Sector Token", "DEFI", underlyingTokens, targetWeights, fulfiller, address(oracle)
+        );
+
+        sectorToken = vault.SECTOR_TOKEN();
 
         // Distribute tokens
         require(usdc.transfer(user1, 10_000 * 10 ** 18), "USDC transfer to user1 failed");
@@ -67,8 +77,8 @@ contract SectorVaultTest is Test {
     }
 
     function test_Deployment() public view {
-        assertEq(address(vault.quoteToken()), address(usdc));
-        assertEq(address(vault.sectorToken()), address(sectorToken));
+        assertEq(address(vault.QUOTE_TOKEN()), address(usdc));
+        assertEq(address(vault.SECTOR_TOKEN()), address(sectorToken));
         assertEq(vault.fulfillmentRole(), fulfiller);
         assertEq(vault.owner(), owner);
 
@@ -123,9 +133,9 @@ contract SectorVaultTest is Test {
         vault.fulfillDeposit(depositId, underlyingAmounts);
         vm.stopPrank();
 
-        // Check deposit is fulfilled
-        (,, bool fulfilled,) = vault.pendingDeposits(depositId);
-        assertTrue(fulfilled);
+        // Check deposit has been deleted (cleaned up)
+        (address user,,,) = vault.pendingDeposits(depositId);
+        assertEq(user, address(0), "Deposit should be deleted after fulfillment");
 
         // Check user received sector tokens
         assertEq(sectorToken.balanceOf(user1), depositAmount);
@@ -170,8 +180,9 @@ contract SectorVaultTest is Test {
         assertEq(balanceAfter - balanceBefore, depositAmount);
         assertEq(usdc.balanceOf(address(vault)), 0);
 
-        (,, bool fulfilled,) = vault.pendingDeposits(depositId);
-        assertTrue(fulfilled); // Marked as fulfilled to prevent re-use
+        // Check deposit has been deleted (cleaned up)
+        (address user,,,) = vault.pendingDeposits(depositId);
+        assertEq(user, address(0), "Deposit should be deleted after cancellation");
     }
 
     function test_Withdraw() public {
@@ -281,6 +292,45 @@ contract SectorVaultTest is Test {
         assertEq(vault.fulfillmentRole(), newFulfiller);
     }
 
+    function test_SetOracle() public {
+        // Deploy a new oracle
+        MockOracle newOracle = new MockOracle();
+        newOracle.setPrice(address(token1), 2_000_000); // $2.00
+        newOracle.setPrice(address(token2), 2_000_000);
+        newOracle.setPrice(address(token3), 2_000_000);
+
+        // Update oracle
+        vault.setOracle(address(newOracle));
+        assertEq(address(vault.oracle()), address(newOracle));
+
+        // Verify new oracle is being used
+        // Make a deposit with the new oracle (where tokens are worth $2 each)
+        uint256 depositAmount = 1000 * 10 ** 18;
+
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        uint256 depositId = vault.deposit(depositAmount);
+        vm.stopPrank();
+
+        // Fulfill with underlying tokens
+        uint256[] memory underlyingAmounts = new uint256[](3);
+        underlyingAmounts[0] = 400 * 10 ** 18;
+        underlyingAmounts[1] = 300 * 10 ** 18;
+        underlyingAmounts[2] = 300 * 10 ** 18;
+
+        vm.startPrank(fulfiller);
+        token1.approve(address(vault), underlyingAmounts[0]);
+        token2.approve(address(vault), underlyingAmounts[1]);
+        token3.approve(address(vault), underlyingAmounts[2]);
+        vault.fulfillDeposit(depositId, underlyingAmounts);
+        vm.stopPrank();
+
+        // With new oracle at $2/token, total value should be $2,000 (2,000,000,000 with 6 decimals)
+        // 400 tokens @ $2 = $800, 300 @ $2 = $600, 300 @ $2 = $600 = $2000 total
+        uint256 totalValue = vault.getTotalValue();
+        assertEq(totalValue, 2_000_000_000, "Total value should be $2000 with new oracle");
+    }
+
     function test_UpdateBasket() public {
         address[] memory newTokens = new address[](2);
         newTokens[0] = address(token1);
@@ -339,5 +389,256 @@ contract SectorVaultTest is Test {
         assertEq(balances[0], underlyingAmounts[0]);
         assertEq(balances[1], underlyingAmounts[1]);
         assertEq(balances[2], underlyingAmounts[2]);
+    }
+
+    function test_NAVCalculationWithTwoDeposits() public {
+        // First deposit: User1 deposits 1 USDC (with 18 decimals)
+        uint256 deposit1Amount = 1 * 10 ** 18;
+
+        vm.startPrank(user1);
+        usdc.approve(address(vault), deposit1Amount);
+        uint256 depositId1 = vault.deposit(deposit1Amount);
+        vm.stopPrank();
+
+        // Fulfill with underlying tokens worth $1
+        // With all tokens at $1 per token, we give 1 token of each
+        uint256[] memory underlyingAmounts1 = new uint256[](3);
+        underlyingAmounts1[0] = 0.4 * 10 ** 18; // 0.4 tokens @ $1 = $0.40
+        underlyingAmounts1[1] = 0.3 * 10 ** 18; // 0.3 tokens @ $1 = $0.30
+        underlyingAmounts1[2] = 0.3 * 10 ** 18; // 0.3 tokens @ $1 = $0.30
+        // Total value = $1.00
+
+        vm.startPrank(fulfiller);
+        token1.approve(address(vault), underlyingAmounts1[0]);
+        token2.approve(address(vault), underlyingAmounts1[1]);
+        token3.approve(address(vault), underlyingAmounts1[2]);
+        vault.fulfillDeposit(depositId1, underlyingAmounts1);
+        vm.stopPrank();
+
+        // First deposit should get 1:1 ratio (1 USDC = 1 share token)
+        uint256 user1Shares = sectorToken.balanceOf(user1);
+        assertEq(user1Shares, deposit1Amount, "First deposit should be 1:1");
+
+        // Check NAV is correct
+        uint256 totalValue = vault.getTotalValue();
+        // Total value should be 1 USDC (1000000 with 6 decimals)
+        assertEq(totalValue, 1_000_000, "Total value should be $1.00");
+
+        // Second deposit: User2 deposits 1 USDC
+        uint256 deposit2Amount = 1 * 10 ** 18;
+
+        vm.startPrank(user2);
+        usdc.approve(address(vault), deposit2Amount);
+        uint256 depositId2 = vault.deposit(deposit2Amount);
+        vm.stopPrank();
+
+        // Fulfill with same amounts (vault value doubles)
+        uint256[] memory underlyingAmounts2 = new uint256[](3);
+        underlyingAmounts2[0] = 0.4 * 10 ** 18;
+        underlyingAmounts2[1] = 0.3 * 10 ** 18;
+        underlyingAmounts2[2] = 0.3 * 10 ** 18;
+
+        vm.startPrank(fulfiller);
+        token1.approve(address(vault), underlyingAmounts2[0]);
+        token2.approve(address(vault), underlyingAmounts2[1]);
+        token3.approve(address(vault), underlyingAmounts2[2]);
+        vault.fulfillDeposit(depositId2, underlyingAmounts2);
+        vm.stopPrank();
+
+        // User2 should get same amount of shares since they deposited same value
+        uint256 user2Shares = sectorToken.balanceOf(user2);
+        assertEq(user2Shares, user1Shares, "Equal deposits should get equal shares");
+
+        // Total supply should be 2x the first deposit
+        assertEq(sectorToken.totalSupply(), deposit1Amount + deposit2Amount);
+
+        // Total NAV should be $2.00 (2000000 with 6 decimals)
+        assertEq(vault.getTotalValue(), 2_000_000, "Total value should be $2.00");
+
+        // Both users should have equal ownership (50% each)
+        assertEq(user1Shares, sectorToken.totalSupply() / 2);
+        assertEq(user2Shares, sectorToken.totalSupply() / 2);
+    }
+
+    function test_DepositCleanupAfterFulfillment() public {
+        // Make a deposit
+        uint256 depositAmount = 1000 * 10 ** 18;
+
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        uint256 depositId = vault.deposit(depositAmount);
+        vm.stopPrank();
+
+        // Verify deposit exists
+        (address user, uint256 quoteAmount, bool fulfilled,) = vault.pendingDeposits(depositId);
+        assertEq(user, user1);
+        assertEq(quoteAmount, depositAmount);
+        assertFalse(fulfilled);
+
+        // Fulfill deposit
+        uint256[] memory underlyingAmounts = new uint256[](3);
+        underlyingAmounts[0] = 400 * 10 ** 18;
+        underlyingAmounts[1] = 300 * 10 ** 18;
+        underlyingAmounts[2] = 300 * 10 ** 18;
+
+        vm.startPrank(fulfiller);
+        token1.approve(address(vault), underlyingAmounts[0]);
+        token2.approve(address(vault), underlyingAmounts[1]);
+        token3.approve(address(vault), underlyingAmounts[2]);
+        vault.fulfillDeposit(depositId, underlyingAmounts);
+        vm.stopPrank();
+
+        // Verify deposit has been deleted
+        (user, quoteAmount, fulfilled,) = vault.pendingDeposits(depositId);
+        assertEq(user, address(0));
+        assertEq(quoteAmount, 0);
+        assertFalse(fulfilled);
+
+        // Verify nextDepositId still increments monotonically
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        uint256 newDepositId = vault.deposit(depositAmount);
+        vm.stopPrank();
+
+        assertEq(newDepositId, depositId + 1, "Deposit IDs should increment monotonically");
+    }
+
+    function test_DepositCleanupAfterCancellation() public {
+        // Make a deposit
+        uint256 depositAmount = 1000 * 10 ** 18;
+
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        uint256 depositId = vault.deposit(depositAmount);
+        vm.stopPrank();
+
+        // Verify deposit exists
+        (address user, uint256 quoteAmount, bool fulfilled,) = vault.pendingDeposits(depositId);
+        assertEq(user, user1);
+        assertEq(quoteAmount, depositAmount);
+        assertFalse(fulfilled);
+
+        // Cancel deposit
+        vm.startPrank(user1);
+        vault.cancelDeposit(depositId);
+        vm.stopPrank();
+
+        // Verify deposit has been deleted
+        (user, quoteAmount, fulfilled,) = vault.pendingDeposits(depositId);
+        assertEq(user, address(0));
+        assertEq(quoteAmount, 0);
+        assertFalse(fulfilled);
+
+        // Verify USDC was returned
+        assertEq(usdc.balanceOf(user1), 10_000 * 10 ** 18, "USDC should be returned to user");
+
+        // Verify nextDepositId still increments monotonically
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        uint256 newDepositId = vault.deposit(depositAmount);
+        vm.stopPrank();
+
+        assertEq(newDepositId, depositId + 1, "Deposit IDs should increment monotonically");
+    }
+
+    function test_NAVCalculationWithChangingPrices() public {
+        // ===== STEP 1: First deposit at $1 per token =====
+        uint256 deposit1Amount = 1000 * 10 ** 18; // 1000 USDC (18 decimals)
+
+        vm.startPrank(user1);
+        usdc.approve(address(vault), deposit1Amount);
+        uint256 depositId1 = vault.deposit(deposit1Amount);
+        vm.stopPrank();
+
+        // Fulfill with underlying tokens worth $1 each
+        uint256[] memory underlyingAmounts1 = new uint256[](3);
+        underlyingAmounts1[0] = 400 * 10 ** 18; // 400 tokens @ $1 = $400
+        underlyingAmounts1[1] = 300 * 10 ** 18; // 300 tokens @ $1 = $300
+        underlyingAmounts1[2] = 300 * 10 ** 18; // 300 tokens @ $1 = $300
+        // Total value = $1000
+
+        vm.startPrank(fulfiller);
+        token1.approve(address(vault), underlyingAmounts1[0]);
+        token2.approve(address(vault), underlyingAmounts1[1]);
+        token3.approve(address(vault), underlyingAmounts1[2]);
+        vault.fulfillDeposit(depositId1, underlyingAmounts1);
+        vm.stopPrank();
+
+        // User1 should receive 1000 shares (1:1 for first deposit)
+        uint256 user1Shares = sectorToken.balanceOf(user1);
+        assertEq(user1Shares, deposit1Amount, "First deposit should be 1:1");
+
+        // NAV should be $1000 (1,000,000,000 with 6 decimals)
+        uint256 navBefore = vault.getTotalValue();
+        assertEq(navBefore, 1_000_000_000, "Initial NAV should be $1000");
+
+        // ===== STEP 2: Update oracle prices to $2 per token =====
+        oracle.setPrice(address(token1), 2_000_000); // $2.00
+        oracle.setPrice(address(token2), 2_000_000); // $2.00
+        oracle.setPrice(address(token3), 2_000_000); // $2.00
+
+        // NAV should DOUBLE to $2000 (2,000,000,000 with 6 decimals)
+        // 400 tokens @ $2 = $800, 300 @ $2 = $600, 300 @ $2 = $600 = $2000
+        uint256 navAfter = vault.getTotalValue();
+        assertEq(navAfter, 2_000_000_000, "NAV should double when prices double");
+        assertEq(navAfter, navBefore * 2, "NAV should be exactly 2x initial NAV");
+
+        // ===== STEP 3: Second deposit at new prices =====
+        // User2 deposits same amount (1000 USDC) but should get HALF the shares
+        // because vault is now worth $2000
+        uint256 deposit2Amount = 1000 * 10 ** 18;
+
+        vm.startPrank(user2);
+        usdc.approve(address(vault), deposit2Amount);
+        uint256 depositId2 = vault.deposit(deposit2Amount);
+        vm.stopPrank();
+
+        // Fulfill with same token amounts (but they're worth $2000 now)
+        uint256[] memory underlyingAmounts2 = new uint256[](3);
+        underlyingAmounts2[0] = 400 * 10 ** 18; // 400 tokens @ $2 = $800
+        underlyingAmounts2[1] = 300 * 10 ** 18; // 300 tokens @ $2 = $600
+        underlyingAmounts2[2] = 300 * 10 ** 18; // 300 tokens @ $2 = $600
+        // Total value = $2000
+
+        vm.startPrank(fulfiller);
+        token1.approve(address(vault), underlyingAmounts2[0]);
+        token2.approve(address(vault), underlyingAmounts2[1]);
+        token3.approve(address(vault), underlyingAmounts2[2]);
+        vault.fulfillDeposit(depositId2, underlyingAmounts2);
+        vm.stopPrank();
+
+        // User2 should receive HALF the shares of user1
+        // shares = (quoteAmount * totalShares) / totalValue
+        // shares = (1000 * 1000) / 2000 = 500 (in normalized units)
+        uint256 user2Shares = sectorToken.balanceOf(user2);
+        assertEq(user2Shares, deposit1Amount / 2, "User2 should get half shares due to doubled prices");
+        assertEq(user2Shares, user1Shares / 2, "User2 shares should be half of user1 shares");
+
+        // Total shares should be 1500
+        assertEq(sectorToken.totalSupply(), user1Shares + user2Shares);
+
+        // Total NAV should now be $4000 (4,000,000,000 with 6 decimals)
+        // (800 + 800) tokens @ $2 = $3200 from token1
+        // (600 + 600) tokens @ $2 = $2400 from token2
+        // (600 + 600) tokens @ $2 = $2400 from token3
+        // Wait, that's $8000 total. Let me recalculate...
+        // Actually: 800 tokens @ $2 = $1600, 600 @ $2 = $1200, 600 @ $2 = $1200 = $4000
+        uint256 finalNav = vault.getTotalValue();
+        assertEq(finalNav, 4_000_000_000, "Final NAV should be $4000");
+
+        // ===== STEP 4: Update prices to $0.50 per token =====
+        oracle.setPrice(address(token1), 500_000); // $0.50
+        oracle.setPrice(address(token2), 500_000); // $0.50
+        oracle.setPrice(address(token3), 500_000); // $0.50
+
+        // NAV should be QUARTER of previous ($4000 / 4 = $1000)
+        // 800 tokens @ $0.50 = $400, 600 @ $0.50 = $300, 600 @ $0.50 = $300 = $1000
+        uint256 navAfterDrop = vault.getTotalValue();
+        assertEq(navAfterDrop, 1_000_000_000, "NAV should be $1000 after price drops to $0.50");
+        assertEq(navAfterDrop, finalNav / 4, "NAV should be 1/4 of previous when prices halve");
+
+        // Shares remain unchanged - only NAV changes with prices
+        assertEq(sectorToken.balanceOf(user1), user1Shares, "User1 shares unchanged");
+        assertEq(sectorToken.balanceOf(user2), user2Shares, "User2 shares unchanged");
     }
 }
