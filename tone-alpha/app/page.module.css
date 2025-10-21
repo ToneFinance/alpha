@@ -1,0 +1,147 @@
+.container {
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logoText {
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.logoSubtext {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+.title {
+  font-size: 48px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 16px 0;
+  color: var(--foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  .title {
+    background: linear-gradient(135deg, #ffffff 0%, #a8b3cf 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+.subtitle {
+  font-size: 18px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 60px 0;
+  max-width: 600px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 32px;
+  width: 100%;
+  margin-top: 40px;
+}
+
+.vaultInfoWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .title {
+    font-size: 36px;
+  }
+
+  .subtitle {
+    font-size: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
+.footer {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.footerLinks {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.footerLink {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footerLink:hover {
+  color: #4d9eff;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 165, 0, 0.1);
+  border: 1px solid rgba(255, 165, 0, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #ffa500;
+  font-weight: 600;
+  margin-bottom: 40px;
+}
