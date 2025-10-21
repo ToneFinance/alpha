@@ -1,0 +1,31 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjEzOTY0OTAsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgxRWNFMWMyRUY5NjVBQjY4NjMzQjJjZUY1MTNjOGQ1NDZEOTNCMjQwIn0",
+    "payload": "eyJkb21haW4iOiJhbHBoYS5sYWIudG9uZS5maW5hbmNlIn0",
+    "signature": "jexElL+TgUITcGvxu1dR9ZFBY+jBeV/SR+5QQLbv9hB5JOAgLLdLQFu6Pb9bAsAtw0Doro7XJYjkC4ZPHBouzRs="
+  },
+  "baseBuilder": {
+    "ownerAddress": "0xB6be90FC2CdB4E8e114787a380B67DC6DBd996ce"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Tone Finance",
+    "homeUrl": "https://alpha.lab.tone.finance",
+    "iconUrl": "https://alpha.lab.tone.finance/icon.png",
+    "splashImageUrl": "https://alpha.lab.tone.finance/splash.png",
+    "splashBackgroundColor": "#000000",
+    "primaryCategory": "finance",
+    "tags": ["defi", "investing", "usdc", "tokens", "sectors"],
+    "subtitle": "On-Chain Sector Tokens",
+    "description": "Invest in diversified crypto sectors with on-chain ETF-like tokens. Deposit USDC, receive sector tokens representing a basket of DeFi assets.",
+    "tagline": "Diversified DeFi investing",
+    "heroImageUrl": "https://alpha.lab.tone.finance/hero.png",
+    "screenshotUrls": [
+      "https://alpha.lab.tone.finance/screenshot1.png",
+      "https://alpha.lab.tone.finance/screenshot2.png"
+    ],
+    "ogTitle": "Tone Finance",
+    "ogDescription": "Invest in diversified crypto sectors with on-chain ETF-like tokens on Base",
+    "ogImageUrl": "https://alpha.lab.tone.finance/og-image.png"
+  }
+}

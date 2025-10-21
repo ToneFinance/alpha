@@ -6,8 +6,14 @@ import { WithdrawCard } from "../components/WithdrawCard";
 import { VaultInfo } from "../components/VaultInfo";
 import { PendingDepositsCard } from "../components/PendingDepositsCard";
 import Image from "next/image";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { useEffect } from "react";
 
 export default function Home() {
+  useEffect(() => {
+    sdk.actions.ready();
+  }, []);
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
