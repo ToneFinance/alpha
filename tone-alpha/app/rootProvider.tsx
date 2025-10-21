@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { baseSepolia } from "wagmi/chains";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import "@coinbase/onchainkit/styles.css";
+import { NetworkGuard } from "../components/NetworkGuard";
 
 export function RootProvider({ children }: { children: ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
         },
       }}
     >
+      <NetworkGuard />
       {children}
     </OnchainKitProvider>
   );
