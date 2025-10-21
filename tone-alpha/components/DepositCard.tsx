@@ -97,6 +97,15 @@ export function DepositCard() {
         </span>
       </div>
 
+      <a
+        href="https://faucet.circle.com/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={styles.faucetLink}
+      >
+        Get testnet USDC →
+      </a>
+
       <div className={styles.inputGroup}>
         <label htmlFor="depositAmount">Amount (USDC)</label>
         <div className={styles.inputWrapper}>
