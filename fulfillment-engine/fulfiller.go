@@ -28,12 +28,17 @@ type Fulfiller struct {
 	config            *Config
 	privateKey        *ecdsa.PrivateKey
 	fromAddress       common.Address
-	nonce             *uint64                 // Track nonce manually
-	wg                sync.WaitGroup          // Track in-flight fulfillments
-	mu                sync.Mutex              // Protect nonce access
-	underlyingTokens  []common.Address        // Cached underlying tokens
-	underlyingWeights []*big.Int              // Cached underlying weights
-	approvedTokens    map[common.Address]bool // Track which tokens have max approval
+	nonce             *uint64                  // Track nonce manually
+	wg                sync.WaitGroup           // Track in-flight fulfillments
+	mu                sync.Mutex               // Protect nonce access
+	underlyingTokens  []common.Address         // Cached underlying tokens
+	underlyingWeights []*big.Int               // Cached underlying weights
+	approvedTokens    map[common.Address]bool  // Track which tokens have max approval
+	oracleAddress     common.Address           // Oracle contract address
+	oracleDecimals    uint8                    // Oracle price decimals
+	quoteTokenAddress common.Address           // Quote token (e.g., USDC) address
+	quoteDecimals     uint8                    // Quote token decimals
+	tokenDecimals     map[common.Address]uint8 // Underlying token decimals
 }
 
 func NewFulfiller(config *Config) (*Fulfiller, error) {
@@ -62,17 +67,60 @@ func NewFulfiller(config *Config) (*Fulfiller, error) {
 		fromAddress:    fromAddress,
 		nonce:          nil, // Will be fetched on first transaction
 		approvedTokens: make(map[common.Address]bool),
+		tokenDecimals:  make(map[common.Address]uint8),
 	}
 
-	// Fetch underlying tokens and weights from vault
 	ctx := context.Background()
+
+	// Fetch oracle address from vault
+	oracleAddr, err := fulfiller.getOracleAddress(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oracle address: %v", err)
+	}
+	fulfiller.oracleAddress = oracleAddr
+
+	// Fetch oracle decimals
+	oracleDecimals, err := fulfiller.getOracleDecimals(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oracle decimals: %v", err)
+	}
+	fulfiller.oracleDecimals = oracleDecimals
+
+	// Fetch quote token address from vault
+	quoteTokenAddr, err := fulfiller.getQuoteTokenAddress(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quote token address: %v", err)
+	}
+	fulfiller.quoteTokenAddress = quoteTokenAddr
+
+	// Fetch quote token decimals
+	quoteDecimals, err := fulfiller.getTokenDecimals(ctx, quoteTokenAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quote token decimals: %v", err)
+	}
+	fulfiller.quoteDecimals = quoteDecimals
+
+	// Fetch underlying tokens and weights from vault
 	if err := fulfiller.loadUnderlyingTokens(ctx); err != nil {
 		return nil, fmt.Errorf("failed to load underlying tokens: %v", err)
+	}
+
+	// Fetch decimals for all underlying tokens
+	for _, token := range fulfiller.underlyingTokens {
+		decimals, err := fulfiller.getTokenDecimals(ctx, token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get decimals for token %s: %v", token.Hex(), err)
+		}
+		fulfiller.tokenDecimals[token] = decimals
 	}
 
 	Logger.Info("Fulfillment engine initialized",
 		"fulfiller_address", fromAddress.Hex(),
 		"vault_address", config.SectorVault.Hex(),
+		"oracle_address", oracleAddr.Hex(),
+		"oracle_decimals", oracleDecimals,
+		"quote_token", quoteTokenAddr.Hex(),
+		"quote_decimals", quoteDecimals,
 		"rpc_url", config.RPCURL,
 		"underlying_tokens", len(fulfiller.underlyingTokens),
 	)
@@ -101,27 +149,74 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 		"quote_amount", quoteAmount.String(),
 	)
 
-	// Calculate underlying amounts based on weights from vault
-	// Total weight = sum of all weights (should be 10000 basis points)
+	// Fetch token prices from oracle
+	tokenPrices := make([]*big.Int, len(f.underlyingTokens))
+	for i, token := range f.underlyingTokens {
+		price, err := f.getTokenPrice(ctx, token)
+		if err != nil {
+			Logger.Error("Failed to get token price",
+				"deposit_id", depositId.String(),
+				"token_index", i,
+				"token", token.Hex(),
+				"error", err,
+			)
+			return fmt.Errorf("failed to get price for token %s: %v", token.Hex(), err)
+		}
+		tokenPrices[i] = price
+
+		Logger.Debug("Fetched token price",
+			"deposit_id", depositId.String(),
+			"token_index", i,
+			"token", token.Hex(),
+			"price", price.String(),
+		)
+	}
+
+	// Calculate underlying amounts based on weights AND prices (with dynamic decimals)
+	// For each token: calculate value allocation, then divide by price to get token amount
 	totalWeight := big.NewInt(0)
 	for _, weight := range f.underlyingWeights {
 		totalWeight = new(big.Int).Add(totalWeight, weight)
 	}
 
 	underlyingAmounts := make([]*big.Int, len(f.underlyingTokens))
-	decimalMultiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(12), nil) // Convert USDC (6 decimals) to 18 decimals
 
 	for i, weight := range f.underlyingWeights {
-		// Calculate: (quoteAmount * weight / totalWeight) * 10^12
-		amount := new(big.Int).Div(new(big.Int).Mul(quoteAmount, weight), totalWeight)
-		amount = new(big.Int).Mul(amount, decimalMultiplier)
+		token := f.underlyingTokens[i]
+		tokenDec := f.tokenDecimals[token]
+
+		// Step 1: Calculate value allocation (in quote token decimals)
+		// valueAllocation = quoteAmount * weight / totalWeight
+		valueAllocation := new(big.Int).Div(new(big.Int).Mul(quoteAmount, weight), totalWeight)
+
+		// Step 2: Convert value allocation from quote decimals to oracle decimals
+		// This normalizes the value for price comparison
+		var normalizedValue *big.Int
+		if f.quoteDecimals >= f.oracleDecimals {
+			// Scale down
+			divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(f.quoteDecimals-f.oracleDecimals)), nil)
+			normalizedValue = new(big.Int).Div(valueAllocation, divisor)
+		} else {
+			// Scale up
+			multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(f.oracleDecimals-f.quoteDecimals)), nil)
+			normalizedValue = new(big.Int).Mul(valueAllocation, multiplier)
+		}
+
+		// Step 3: Calculate token amount: (normalizedValue * 10^tokenDecimals) / price
+		// This converts the value (in oracle decimals) to token amount (in token decimals)
+		tokenDecMultiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(tokenDec)), nil)
+		amount := new(big.Int).Div(new(big.Int).Mul(normalizedValue, tokenDecMultiplier), tokenPrices[i])
 		underlyingAmounts[i] = amount
 
 		Logger.Debug("Calculated underlying token amount",
 			"deposit_id", depositId.String(),
 			"token_index", i,
-			"token", f.underlyingTokens[i].Hex(),
+			"token", token.Hex(),
+			"token_decimals", tokenDec,
 			"weight", weight.String(),
+			"price", tokenPrices[i].String(),
+			"value_allocation", valueAllocation.String(),
+			"normalized_value", normalizedValue.String(),
 			"amount", amount.String(),
 		)
 	}
@@ -551,4 +646,149 @@ func (f *Fulfiller) loadUnderlyingTokens(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// getOracleAddress fetches the oracle address from the vault
+func (f *Fulfiller) getOracleAddress(ctx context.Context) (common.Address, error) {
+	parsedABI, err := ParseSectorVaultABI()
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	data, err := parsedABI.Pack("oracle")
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.config.SectorVault,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	var oracleAddr common.Address
+	err = parsedABI.UnpackIntoInterface(&oracleAddr, "oracle", result)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	return oracleAddr, nil
+}
+
+// getTokenPrice fetches the price of a token from the oracle (returns price with oracle decimals)
+func (f *Fulfiller) getTokenPrice(ctx context.Context, token common.Address) (*big.Int, error) {
+	parsedABI, err := ParseOracleABI()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := parsedABI.Pack("getPrice", token)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.oracleAddress,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var price *big.Int
+	err = parsedABI.UnpackIntoInterface(&price, "getPrice", result)
+	if err != nil {
+		return nil, err
+	}
+
+	return price, nil
+}
+
+// getOracleDecimals fetches the decimals from the oracle
+func (f *Fulfiller) getOracleDecimals(ctx context.Context) (uint8, error) {
+	parsedABI, err := ParseOracleABI()
+	if err != nil {
+		return 0, err
+	}
+
+	data, err := parsedABI.Pack("decimals")
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.oracleAddress,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	var decimals uint8
+	err = parsedABI.UnpackIntoInterface(&decimals, "decimals", result)
+	if err != nil {
+		return 0, err
+	}
+
+	return decimals, nil
+}
+
+// getQuoteTokenAddress fetches the quote token address from the vault
+func (f *Fulfiller) getQuoteTokenAddress(ctx context.Context) (common.Address, error) {
+	parsedABI, err := ParseSectorVaultABI()
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	data, err := parsedABI.Pack("QUOTE_TOKEN")
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.config.SectorVault,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	var quoteToken common.Address
+	err = parsedABI.UnpackIntoInterface(&quoteToken, "QUOTE_TOKEN", result)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	return quoteToken, nil
+}
+
+// getTokenDecimals fetches the decimals for an ERC20 token
+func (f *Fulfiller) getTokenDecimals(ctx context.Context, token common.Address) (uint8, error) {
+	parsedABI, err := ParseERC20ABI()
+	if err != nil {
+		return 0, err
+	}
+
+	data, err := parsedABI.Pack("decimals")
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &token,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	var decimals uint8
+	err = parsedABI.UnpackIntoInterface(&decimals, "decimals", result)
+	if err != nil {
+		return 0, err
+	}
+
+	return decimals, nil
 }

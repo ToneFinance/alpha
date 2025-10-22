@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// ERC20 ABI (approve, allowance, and balanceOf functions)
+// ERC20 ABI (approve, allowance, balanceOf, and decimals functions)
 const ERC20ABI = `[
 	{
 		"constant": false,
@@ -35,6 +35,13 @@ const ERC20ABI = `[
 		"inputs": [{"name": "account", "type": "address"}],
 		"name": "balanceOf",
 		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "decimals",
+		"outputs": [{"name": "", "type": "uint8"}],
 		"type": "function"
 	}
 ]`
@@ -94,6 +101,38 @@ const SectorVaultABI = `[
 		"name": "targetWeights",
 		"outputs": [{"name": "", "type": "uint256"}],
 		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "oracle",
+		"outputs": [{"name": "", "type": "address"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "QUOTE_TOKEN",
+		"outputs": [{"name": "", "type": "address"}],
+		"type": "function"
+	}
+]`
+
+// Oracle ABI (getPrice function)
+const OracleABI = `[
+	{
+		"constant": true,
+		"inputs": [{"name": "token", "type": "address"}],
+		"name": "getPrice",
+		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "decimals",
+		"outputs": [{"name": "", "type": "uint8"}],
+		"type": "function"
 	}
 ]`
 
@@ -119,4 +158,8 @@ func ParseERC20ABI() (abi.ABI, error) {
 
 func ParseSectorVaultABI() (abi.ABI, error) {
 	return abi.JSON(strings.NewReader(SectorVaultABI))
+}
+
+func ParseOracleABI() (abi.ABI, error) {
+	return abi.JSON(strings.NewReader(OracleABI))
 }

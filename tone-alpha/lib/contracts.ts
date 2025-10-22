@@ -5,8 +5,8 @@ import ERC20ABI from "../contracts/ERC20.json";
 // Contract addresses on Base Sepolia
 // Deployed on Base Sepolia testnet
 export const CONTRACTS = {
-  SECTOR_VAULT: "0x629Eea75B6932bC214fF9486bcA86012483771C1",
-  SECTOR_TOKEN: "0x4929A55D1FE9d99fea2589A51812BEb858A7cce6",
+  SECTOR_VAULT: "0xfE33131EDbeC8b1f34550e63B5E63910985F99c6",
+  SECTOR_TOKEN: "0xd596E4a4EcbB73601FAa875c3277Af9F6Cff6948",
   USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
 } as const;
 

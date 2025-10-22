@@ -74,6 +74,7 @@ contract SectorVault is Ownable, ReentrancyGuard {
     error UnauthorizedFulfillment();
     error InsufficientShares();
     error EmptyBasket();
+    error FulfillmentValueMismatch();
 
     /**
      * @notice Creates a new sector vault
@@ -153,6 +154,28 @@ contract SectorVault is Ownable, ReentrancyGuard {
         if (pendingDeposit.user == address(0)) revert DepositNotFound();
         if (pendingDeposit.fulfilled) revert DepositAlreadyFulfilled();
         if (underlyingAmounts.length != underlyingTokens.length) revert InvalidAmount();
+
+        // Calculate the total value of underlying tokens being provided
+        uint256 totalUnderlyingValue = 0;
+        for (uint256 i = 0; i < underlyingTokens.length; i++) {
+            if (underlyingAmounts[i] > 0) {
+                totalUnderlyingValue += oracle.getValue(underlyingTokens[i], underlyingAmounts[i]);
+            }
+        }
+
+        // Verify the value matches the quote amount deposited
+        // Convert quote amount to oracle decimals for comparison
+        uint8 quoteDecimals = IERC20Metadata(address(QUOTE_TOKEN)).decimals();
+        uint8 oracleDecimals = oracle.decimals();
+
+        uint256 normalizedQuoteAmount;
+        if (quoteDecimals >= oracleDecimals) {
+            normalizedQuoteAmount = pendingDeposit.quoteAmount / (10 ** (quoteDecimals - oracleDecimals));
+        } else {
+            normalizedQuoteAmount = pendingDeposit.quoteAmount * (10 ** (oracleDecimals - quoteDecimals));
+        }
+
+        if (totalUnderlyingValue != normalizedQuoteAmount) revert FulfillmentValueMismatch();
 
         // Mark as fulfilled
         pendingDeposit.fulfilled = true;

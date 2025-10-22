@@ -51,8 +51,8 @@ contract DeploySectorVault is Script {
         // Deploy vault
         SectorVault vault = new SectorVault(
             USDC_BASE_SEPOLIA,
-            "AI Sector",
-            "AI",
+            "Tone AI Sector",
+            "tAI",
             underlyingTokens,
             targetWeights,
             fulfillmentEngine, // fulfillment role

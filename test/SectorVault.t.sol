@@ -312,11 +312,13 @@ contract SectorVaultTest is Test {
         uint256 depositId = vault.deposit(depositAmount);
         vm.stopPrank();
 
-        // Fulfill with underlying tokens
+        // Fulfill with underlying tokens worth $1000
+        // With tokens at $2 each, we need HALF the amount
         uint256[] memory underlyingAmounts = new uint256[](3);
-        underlyingAmounts[0] = 400 * 10 ** 18;
-        underlyingAmounts[1] = 300 * 10 ** 18;
-        underlyingAmounts[2] = 300 * 10 ** 18;
+        underlyingAmounts[0] = 200 * 10 ** 18; // 200 tokens @ $2 = $400
+        underlyingAmounts[1] = 150 * 10 ** 18; // 150 tokens @ $2 = $300
+        underlyingAmounts[2] = 150 * 10 ** 18; // 150 tokens @ $2 = $300
+        // Total value = $1000
 
         vm.startPrank(fulfiller);
         token1.approve(address(vault), underlyingAmounts[0]);
@@ -325,10 +327,10 @@ contract SectorVaultTest is Test {
         vault.fulfillDeposit(depositId, underlyingAmounts);
         vm.stopPrank();
 
-        // With new oracle at $2/token, total value should be $2,000 (2,000,000,000 with 6 decimals)
-        // 400 tokens @ $2 = $800, 300 @ $2 = $600, 300 @ $2 = $600 = $2000 total
+        // With new oracle at $2/token, total value should be $1,000 (1,000,000,000 with 6 decimals)
+        // 200 tokens @ $2 = $400, 150 @ $2 = $300, 150 @ $2 = $300 = $1000 total
         uint256 totalValue = vault.getTotalValue();
-        assertEq(totalValue, 2_000_000_000, "Total value should be $2000 with new oracle");
+        assertEq(totalValue, 1_000_000_000, "Total value should be $1000 with new oracle");
     }
 
     function test_UpdateBasket() public {
@@ -593,12 +595,12 @@ contract SectorVaultTest is Test {
         uint256 depositId2 = vault.deposit(deposit2Amount);
         vm.stopPrank();
 
-        // Fulfill with same token amounts (but they're worth $2000 now)
+        // Fulfill with HALF the token amounts (to match $1000 at $2/token prices)
         uint256[] memory underlyingAmounts2 = new uint256[](3);
-        underlyingAmounts2[0] = 400 * 10 ** 18; // 400 tokens @ $2 = $800
-        underlyingAmounts2[1] = 300 * 10 ** 18; // 300 tokens @ $2 = $600
-        underlyingAmounts2[2] = 300 * 10 ** 18; // 300 tokens @ $2 = $600
-        // Total value = $2000
+        underlyingAmounts2[0] = 200 * 10 ** 18; // 200 tokens @ $2 = $400
+        underlyingAmounts2[1] = 150 * 10 ** 18; // 150 tokens @ $2 = $300
+        underlyingAmounts2[2] = 150 * 10 ** 18; // 150 tokens @ $2 = $300
+        // Total value = $1000
 
         vm.startPrank(fulfiller);
         token1.approve(address(vault), underlyingAmounts2[0]);
@@ -617,25 +619,24 @@ contract SectorVaultTest is Test {
         // Total shares should be 1500
         assertEq(sectorToken.totalSupply(), user1Shares + user2Shares);
 
-        // Total NAV should now be $4000 (4,000,000,000 with 6 decimals)
-        // (800 + 800) tokens @ $2 = $3200 from token1
-        // (600 + 600) tokens @ $2 = $2400 from token2
-        // (600 + 600) tokens @ $2 = $2400 from token3
-        // Wait, that's $8000 total. Let me recalculate...
-        // Actually: 800 tokens @ $2 = $1600, 600 @ $2 = $1200, 600 @ $2 = $1200 = $4000
+        // Total NAV should now be $3000 (3,000,000,000 with 6 decimals)
+        // (400 + 200) tokens @ $2 = $1200 from token1
+        // (300 + 150) tokens @ $2 = $900 from token2
+        // (300 + 150) tokens @ $2 = $900 from token3
+        // Total: 600 @ $2 = $1200, 450 @ $2 = $900, 450 @ $2 = $900 = $3000
         uint256 finalNav = vault.getTotalValue();
-        assertEq(finalNav, 4_000_000_000, "Final NAV should be $4000");
+        assertEq(finalNav, 3_000_000_000, "Final NAV should be $3000");
 
         // ===== STEP 4: Update prices to $0.50 per token =====
         oracle.setPrice(address(token1), 500_000); // $0.50
         oracle.setPrice(address(token2), 500_000); // $0.50
         oracle.setPrice(address(token3), 500_000); // $0.50
 
-        // NAV should be QUARTER of previous ($4000 / 4 = $1000)
-        // 800 tokens @ $0.50 = $400, 600 @ $0.50 = $300, 600 @ $0.50 = $300 = $1000
+        // NAV should be QUARTER of previous ($3000 / 4 = $750)
+        // 600 tokens @ $0.50 = $300, 450 @ $0.50 = $225, 450 @ $0.50 = $225 = $750
         uint256 navAfterDrop = vault.getTotalValue();
-        assertEq(navAfterDrop, 1_000_000_000, "NAV should be $1000 after price drops to $0.50");
-        assertEq(navAfterDrop, finalNav / 4, "NAV should be 1/4 of previous when prices halve");
+        assertEq(navAfterDrop, 750_000_000, "NAV should be $750 after price drops to $0.50");
+        assertEq(navAfterDrop, finalNav / 4, "NAV should be 1/4 of previous when prices drop to 1/4");
 
         // Shares remain unchanged - only NAV changes with prices
         assertEq(sectorToken.balanceOf(user1), user1Shares, "User1 shares unchanged");
