@@ -1,6 +1,9 @@
 name = "finance-tone-lab-alpha"
 compatibility_date = "2025-08-29"
 
+[vars]
+NEXT_PUBLIC_SITE_URL = "https://alpha.lab.tone.finance"
+
 [assets]
 directory = "./out"
 not_found_handling = "single-page-application"

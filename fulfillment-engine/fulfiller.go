@@ -155,13 +155,43 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 
 // ensureTokenApproval ensures a token has max approval, only approving once per token
 func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Address) error {
-	// Check if already approved
+	// Check if already approved in memory
 	f.mu.Lock()
 	if f.approvedTokens[token] {
 		f.mu.Unlock()
 		return nil
 	}
 	f.mu.Unlock()
+
+	// Check on-chain allowance
+	allowance, err := f.getAllowance(ctx, token)
+	if err != nil {
+		Logger.Warn("Failed to check allowance, will attempt approval anyway",
+			"token", token.Hex(),
+			"error", err,
+		)
+	} else {
+		// If allowance is already very high (e.g., > 10^70), skip approval
+		minAllowance := new(big.Int)
+		minAllowance.SetString("1000000000000000000000000000000000000000000000000000000000000000000000", 10) // 10^70
+
+		if allowance.Cmp(minAllowance) >= 0 {
+			Logger.Info("Token already has sufficient allowance, skipping approval",
+				"token", token.Hex(),
+				"allowance", allowance.String(),
+			)
+			// Mark as approved
+			f.mu.Lock()
+			f.approvedTokens[token] = true
+			f.mu.Unlock()
+			return nil
+		}
+
+		Logger.Info("Current allowance insufficient, approving max amount",
+			"token", token.Hex(),
+			"current_allowance", allowance.String(),
+		)
+	}
 
 	// Approve max uint256 amount
 	maxUint256 := new(big.Int)
@@ -203,6 +233,35 @@ func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Addres
 		"tx_hash", tx.Hash().Hex(),
 	)
 	return nil
+}
+
+// getAllowance checks the on-chain allowance for a token
+func (f *Fulfiller) getAllowance(ctx context.Context, token common.Address) (*big.Int, error) {
+	parsedABI, err := ParseERC20ABI()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := parsedABI.Pack("allowance", f.fromAddress, f.config.SectorVault)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &token,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var allowance *big.Int
+	err = parsedABI.UnpackIntoInterface(&allowance, "allowance", result)
+	if err != nil {
+		return nil, err
+	}
+
+	return allowance, nil
 }
 
 func (f *Fulfiller) callFulfillDeposit(ctx context.Context, depositId *big.Int, amounts []*big.Int) error {
@@ -274,7 +333,7 @@ func (f *Fulfiller) sendTransaction(ctx context.Context, to common.Address, valu
 		return nil, err
 	}
 
-	tx := types.NewTransaction(nonce, to, value, 300000, gasPrice, data)
+	tx := types.NewTransaction(nonce, to, value, 800000, gasPrice, data)
 
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), f.privateKey)
 	if err != nil {

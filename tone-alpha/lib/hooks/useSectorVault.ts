@@ -47,6 +47,12 @@ export function useSectorVault() {
     functionName: "totalSupply",
   });
 
+  // Read total value locked (TVL) in USDC
+  const { data: totalValue } = useReadContract({
+    ...sectorVaultConfig,
+    functionName: "getTotalValue",
+  });
+
   const refetchAll = () => {
     refetchUsdcBalance();
     refetchSectorTokenBalance();
@@ -63,6 +69,7 @@ export function useSectorVault() {
     underlyingTokens: underlyingTokens as [string[], bigint[]] | undefined,
     vaultBalances: vaultBalances as [string[], bigint[]] | undefined,
     totalSupply: totalSupply as bigint | undefined,
+    totalValue: totalValue as bigint | undefined,
 
     // Utility
     refetchAll,
@@ -143,6 +150,26 @@ export function useWithdraw() {
 }
 
 /**
+ * Hook to get the vault's token addresses
+ */
+export function useVaultTokens() {
+  const { data: quoteTokenAddress } = useReadContract({
+    ...sectorVaultConfig,
+    functionName: "quoteToken",
+  });
+
+  const { data: sectorTokenAddress } = useReadContract({
+    ...sectorVaultConfig,
+    functionName: "sectorToken",
+  });
+
+  return {
+    quoteTokenAddress: quoteTokenAddress as string | undefined,
+    sectorTokenAddress: sectorTokenAddress as string | undefined,
+  };
+}
+
+/**
  * Hook to read a specific pending deposit
  */
 export function usePendingDeposit(depositId: bigint | undefined) {
@@ -180,9 +207,9 @@ export function useNextDepositId() {
 }
 
 /**
- * Hook to fetch a single token symbol
+ * Hook to fetch token metadata (symbol, decimals, name)
  */
-export function useTokenSymbol(tokenAddress: string | undefined) {
+export function useTokenMetadata(tokenAddress: string | undefined) {
   const { data: symbol } = useReadContract({
     address: tokenAddress as `0x${string}`,
     abi: ABIS.ERC20,
@@ -192,7 +219,37 @@ export function useTokenSymbol(tokenAddress: string | undefined) {
     },
   });
 
-  return symbol as string | undefined;
+  const { data: decimals } = useReadContract({
+    address: tokenAddress as `0x${string}`,
+    abi: ABIS.ERC20,
+    functionName: "decimals",
+    query: {
+      enabled: !!tokenAddress,
+    },
+  });
+
+  const { data: name } = useReadContract({
+    address: tokenAddress as `0x${string}`,
+    abi: ABIS.ERC20,
+    functionName: "name",
+    query: {
+      enabled: !!tokenAddress,
+    },
+  });
+
+  return {
+    symbol: symbol as string | undefined,
+    decimals: decimals as number | undefined,
+    name: name as string | undefined,
+  };
+}
+
+/**
+ * Hook to fetch a single token symbol (legacy - use useTokenMetadata instead)
+ */
+export function useTokenSymbol(tokenAddress: string | undefined) {
+  const { symbol } = useTokenMetadata(tokenAddress);
+  return symbol;
 }
 
 /**
@@ -208,4 +265,20 @@ export function formatTokenAmount(amount: bigint | undefined, decimals = 18): st
  */
 export function parseTokenAmount(amount: string, decimals = 18): bigint {
   return parseUnits(amount, decimals);
+}
+
+/**
+ * Hook to fetch target weight for a specific token
+ */
+export function useTargetWeight(tokenAddress: string | undefined) {
+  const { data: weight } = useReadContract({
+    ...sectorVaultConfig,
+    functionName: "targetWeights",
+    args: tokenAddress ? [tokenAddress as `0x${string}`] : undefined,
+    query: {
+      enabled: !!tokenAddress,
+    },
+  });
+
+  return weight as bigint | undefined;
 }

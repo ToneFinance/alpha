@@ -1,36 +1,70 @@
 "use client";
 
-import { useSectorVault, formatTokenAmount, useTokenSymbol } from "../lib/hooks/useSectorVault";
+import { useSectorVault, formatTokenAmount, useTokenMetadata, useTargetWeight } from "../lib/hooks/useSectorVault";
+import { CONTRACTS } from "../lib/contracts";
 import { AddTokenButton } from "./AddTokenButton";
 import styles from "./Card.module.css";
 
 function TokenRow({ address, balance }: { address: string; balance: bigint }) {
-  const symbol = useTokenSymbol(address);
+  const token = useTokenMetadata(address);
+  const weight = useTargetWeight(address);
+  const symbol = token.symbol ?? "...";
+  const decimals = token.decimals ?? 18;
+
+  // Convert weight from basis points (10000 = 100%) to percentage
+  const weightPercent = weight ? (Number(weight) / 100).toFixed(1) : null;
 
   return (
     <div className={styles.tokenItem}>
       <span className={styles.tokenSymbol}>
-        {symbol || "..."}
+        {symbol}
+        {weightPercent && (
+          <span className={styles.tokenWeight}>
+            ({weightPercent}%)
+          </span>
+        )}
       </span>
-      <span>
-        {formatTokenAmount(balance, 18)}
+      <span className={styles.tokenBalance}>
+        {formatTokenAmount(balance, decimals)}
       </span>
     </div>
   );
 }
 
 export function VaultInfo() {
-  const { totalSupply, vaultBalances, underlyingTokens } = useSectorVault();
+  const { totalSupply, totalValue, vaultBalances, underlyingTokens } = useSectorVault();
+
+  // Fetch dynamic token metadata from configured addresses
+  const sectorToken = useTokenMetadata(CONTRACTS.SECTOR_TOKEN);
+  const quoteToken = useTokenMetadata(CONTRACTS.USDC);
+
+  const sectorDecimals = sectorToken.decimals ?? 18;
+  const sectorSymbol = sectorToken.symbol ?? "Sector Token";
+  const quoteSymbol = quoteToken.symbol ?? "USDC";
+  const quoteDecimals = quoteToken.decimals ?? 6;
+
+  // Debug logging
+  console.log("TVL Debug:", {
+    totalValue: totalValue?.toString(),
+    quoteDecimals,
+    vaultBalances: vaultBalances?.[1]?.map(b => b.toString())
+  });
 
   return (
     <div className={styles.infoCard}>
-      <h2>DeFi Sector Vault</h2>
+      <h2>{sectorToken.name || "Sector Vault"}</h2>
 
       <div className={styles.statGrid}>
         <div className={styles.statItem}>
           <span className={styles.statLabel}>Total Supply</span>
           <span className={styles.statValue}>
-            {totalSupply ? formatTokenAmount(totalSupply, 18) : "0"} DEFI
+            {totalSupply ? formatTokenAmount(totalSupply, sectorDecimals) : "0"} {sectorSymbol}
+          </span>
+        </div>
+        <div className={styles.statItem}>
+          <span className={styles.statLabel}>Total Value Locked (TVL)</span>
+          <span className={styles.statValue} style={{ fontVariantNumeric: "tabular-nums" }}>
+            {totalValue ? formatTokenAmount(totalValue, quoteDecimals) : "0"} {quoteSymbol}
           </span>
         </div>
       </div>
@@ -50,7 +84,7 @@ export function VaultInfo() {
 
       <p className={styles.description} style={{ marginTop: "20px", marginBottom: 0 }}>
         Tone Finance sector tokens are on-chain ETFs representing a basket of DeFi tokens.
-        Deposit USDC to receive sector tokens, which can be withdrawn for underlying assets.
+        Deposit {quoteSymbol} to receive {sectorSymbol}, which can be withdrawn for underlying assets.
       </p>
 
       <AddTokenButton />

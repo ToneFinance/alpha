@@ -38,7 +38,6 @@ export default function Home() {
           ⚠️ Alpha Version - Base Sepolia Testnet
         </div>
 
-        <h1 className={styles.title}>DeFi Sector Vault</h1>
         <p className={styles.subtitle}>
           Invest in diversified crypto sectors with on-chain ETF-like tokens.
           Deposit USDC, receive sector tokens representing a basket of DeFi assets.

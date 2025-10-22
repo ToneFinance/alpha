@@ -8,7 +8,9 @@ import {
   useDeposit,
   formatTokenAmount,
   parseTokenAmount,
+  useTokenMetadata,
 } from "../lib/hooks/useSectorVault";
+import { CONTRACTS } from "../lib/contracts";
 import styles from "./Card.module.css";
 
 export function DepositCard() {
@@ -20,7 +22,15 @@ export function DepositCard() {
   const { approve, isPending: isApproving, isConfirming: isApprovingConfirming, isSuccess: isApproved, hash: approveHash } = useApproveUsdc();
   const { deposit, isPending: isDepositing, isConfirming: isDepositingConfirming, isSuccess: isDeposited } = useDeposit();
 
-  const amountBigInt = amount ? parseTokenAmount(amount, 6) : 0n; // USDC has 6 decimals
+  // Fetch dynamic token metadata from configured addresses
+  const quoteToken = useTokenMetadata(CONTRACTS.USDC);
+  const sectorToken = useTokenMetadata(CONTRACTS.SECTOR_TOKEN);
+
+  const quoteDecimals = quoteToken.decimals ?? 6;
+  const quoteSymbol = quoteToken.symbol ?? "USDC";
+  const sectorSymbol = sectorToken.symbol ?? "Sector Token";
+
+  const amountBigInt = amount ? parseTokenAmount(amount, quoteDecimals) : 0n;
   const needsApproval = usdcAllowance !== undefined && amountBigInt > usdcAllowance;
 
   const hasTriggeredDepositRef = useRef(false);
@@ -60,7 +70,7 @@ export function DepositCard() {
 
   const handleMax = () => {
     if (usdcBalance) {
-      setAmount(formatTokenAmount(usdcBalance, 6));
+      setAmount(formatTokenAmount(usdcBalance, quoteDecimals));
     }
   };
 
@@ -82,7 +92,7 @@ export function DepositCard() {
   if (!isConnected) {
     return (
       <div className={styles.card}>
-        <h2>Deposit USDC</h2>
+        <h2>Deposit {quoteSymbol}</h2>
         <p className={styles.connectMessage}>Please connect your wallet to deposit</p>
       </div>
     );
@@ -90,15 +100,15 @@ export function DepositCard() {
 
   return (
     <div className={styles.card}>
-      <h2>Deposit USDC</h2>
+      <h2>Deposit {quoteSymbol}</h2>
       <p className={styles.description}>
-        Deposit USDC to receive sector tokens representing your share of the basket
+        Deposit {quoteSymbol} to receive {sectorSymbol} representing your share of the basket
       </p>
 
       <div className={styles.balanceInfo}>
-        <span>Your USDC Balance:</span>
+        <span>Your {quoteSymbol} Balance:</span>
         <span className={styles.balance}>
-          {usdcBalance ? formatTokenAmount(usdcBalance, 6) : "0"} USDC
+          {usdcBalance ? formatTokenAmount(usdcBalance, quoteDecimals) : "0"} {quoteSymbol}
         </span>
       </div>
 
@@ -108,11 +118,11 @@ export function DepositCard() {
         rel="noopener noreferrer"
         className={styles.faucetLink}
       >
-        Get testnet USDC →
+        Get testnet {quoteSymbol} →
       </a>
 
       <div className={styles.inputGroup}>
-        <label htmlFor="depositAmount">Amount (USDC)</label>
+        <label htmlFor="depositAmount">Amount ({quoteSymbol})</label>
         <div className={styles.inputWrapper}>
           <input
             id="depositAmount"
@@ -132,7 +142,7 @@ export function DepositCard() {
 
       {needsApproval && (
         <p className={styles.infoMessage}>
-          First-time deposit requires 2 transactions: approve USDC spending, then deposit
+          First-time deposit requires 2 transactions: approve {quoteSymbol} spending, then deposit
         </p>
       )}
 
@@ -166,7 +176,7 @@ export function DepositCard() {
 
       {isDeposited && (
         <p className={styles.successMessage}>
-          Deposit successful! Your sector tokens will be minted once the fulfillment engine processes your deposit.
+          Deposit successful! Your {sectorSymbol} will be minted once the fulfillment engine processes your deposit.
         </p>
       )}
     </div>

@@ -1,0 +1,382 @@
+/* Modal overlay */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9998;
+}
+
+.certificateContainerModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 700px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  z-index: 9999;
+}
+
+.certificateContainer {
+  position: relative;
+  width: 100%;
+  min-height: 500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.certificate {
+  position: relative;
+  width: 100%;
+  max-width: 700px;
+  background: linear-gradient(135deg, #fdfbf7 0%, #f5f1e8 100%);
+  border: 3px solid #8b7355;
+  border-radius: 8px;
+  padding: 40px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.15),
+    inset 0 0 60px rgba(218, 165, 32, 0.05);
+  overflow: hidden;
+}
+
+/* Corner decorations */
+.cornerTopLeft,
+.cornerTopRight,
+.cornerBottomLeft,
+.cornerBottomRight {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border: 2px solid #daa520;
+  opacity: 0.6;
+}
+
+.cornerTopLeft {
+  top: 15px;
+  left: 15px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 8px;
+}
+
+.cornerTopRight {
+  top: 15px;
+  right: 15px;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 8px;
+}
+
+.cornerBottomLeft {
+  bottom: 15px;
+  left: 15px;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 8px;
+}
+
+.cornerBottomRight {
+  bottom: 15px;
+  right: 15px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 8px;
+}
+
+.certificateContent {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.header {
+  margin-bottom: 30px;
+}
+
+.header h2 {
+  font-family: 'Georgia', serif;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #2c2416;
+  margin: 0 0 10px 0;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.ornament {
+  font-size: 24px;
+  color: #daa520;
+  margin: 10px 0;
+}
+
+.body {
+  margin: 40px 0;
+}
+
+.thisIs {
+  font-family: 'Georgia', serif;
+  font-size: 16px;
+  font-style: italic;
+  color: #5a4a3a;
+  margin-bottom: 15px;
+}
+
+.recipientBox {
+  border-bottom: 2px solid #8b7355;
+  margin: 20px auto;
+  padding: 10px 0;
+  overflow: hidden;
+  max-width: 400px;
+}
+
+.bearer {
+  font-family: 'Georgia', serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: #2c2416;
+  letter-spacing: 3px;
+}
+
+.owns {
+  font-family: 'Georgia', serif;
+  font-size: 14px;
+  font-style: italic;
+  color: #5a4a3a;
+  margin: 25px 0 20px 0;
+}
+
+.amountBox {
+  background: linear-gradient(135deg, #fff9e6 0%, #ffe9b8 100%);
+  border: 2px solid #daa520;
+  border-radius: 8px;
+  padding: 20px 30px;
+  margin: 20px auto;
+  max-width: 400px;
+  box-shadow: 0 4px 12px rgba(218, 165, 32, 0.2);
+}
+
+.amount {
+  font-family: 'Georgia', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: #8b6914;
+  letter-spacing: 2px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.sharesText {
+  font-family: 'Georgia', serif;
+  font-size: 16px;
+  font-style: italic;
+  color: #5a4a3a;
+  margin-top: 25px;
+}
+
+.footer {
+  margin-top: 50px;
+  border-top: 2px solid #daa520;
+  padding-top: 30px;
+}
+
+.details {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 30px;
+  font-family: 'Georgia', serif;
+}
+
+.details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8b7355;
+  font-weight: 600;
+}
+
+.value {
+  font-size: 14px;
+  color: #2c2416;
+  font-weight: 500;
+}
+
+.signature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.signatureSvg {
+  width: 200px;
+  height: 60px;
+  color: #2c2416;
+}
+
+.signatureLabel {
+  font-family: 'Georgia', serif;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8b7355;
+  border-top: 1px solid #8b7355;
+  padding-top: 5px;
+  width: 200px;
+  text-align: center;
+}
+
+/* Stamp styles */
+.stamp {
+  position: absolute;
+  top: 50%;
+  right: 10%;
+  transform: rotate(-15deg);
+  z-index: 10;
+}
+
+.stampInner {
+  width: 140px;
+  height: 140px;
+  border: 6px solid #c41e3a;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(circle, rgba(196, 30, 58, 0.15) 0%, rgba(196, 30, 58, 0.05) 100%);
+  box-shadow: 0 0 20px rgba(196, 30, 58, 0.4);
+}
+
+.stampText {
+  text-align: center;
+  font-family: 'Georgia', serif;
+  font-weight: 900;
+  color: #c41e3a;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.stampText > div:first-child {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 5px;
+}
+
+.stampDate {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Processing indicator */
+.processing {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Georgia', serif;
+  font-size: 12px;
+  font-style: italic;
+  color: #8b7355;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .certificate {
+    padding: 30px 20px;
+  }
+
+  .header h2 {
+    font-size: 24px;
+    letter-spacing: 3px;
+  }
+
+  .amount {
+    font-size: 28px;
+  }
+
+  .stamp {
+    right: 5%;
+    top: 45%;
+  }
+
+  .stampInner {
+    width: 110px;
+    height: 110px;
+  }
+
+  .stampText > div:first-child {
+    font-size: 22px;
+  }
+
+  .cornerTopLeft,
+  .cornerTopRight,
+  .cornerBottomLeft,
+  .cornerBottomRight {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+@media (max-width: 480px) {
+  .certificateContainer {
+    min-height: 400px;
+    padding: 10px;
+  }
+
+  .certificate {
+    padding: 25px 15px;
+  }
+
+  .header h2 {
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+
+  .bearer {
+    font-size: 18px;
+  }
+
+  .amount {
+    font-size: 24px;
+  }
+
+  .stamp {
+    right: 3%;
+    top: 40%;
+  }
+
+  .stampInner {
+    width: 90px;
+    height: 90px;
+    border-width: 4px;
+  }
+
+  .stampText > div:first-child {
+    font-size: 18px;
+  }
+
+  .stampDate {
+    font-size: 9px;
+  }
+}

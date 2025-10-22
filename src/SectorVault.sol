@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -235,32 +236,56 @@ contract SectorVault is Ownable, ReentrancyGuard {
     /**
      * @notice Calculate shares to mint for a given quote amount
      * @dev Uses NAV (Net Asset Value) calculation with oracle prices
-     * @param quoteAmount Amount of quote tokens deposited (18 decimals)
-     * @return shares Amount of shares to mint (18 decimals)
+     * @param quoteAmount Amount of quote tokens deposited (in quote token decimals)
+     * @return shares Amount of shares to mint (in sector token decimals)
      */
     function calculateShares(uint256 quoteAmount) public view returns (uint256 shares) {
         uint256 totalShares = SECTOR_TOKEN.totalSupply();
 
-        // First deposit: 1:1 ratio
-        if (totalShares == 0) {
-            return quoteAmount;
+        // Get decimal places for conversion
+        uint8 quoteDecimals = IERC20Metadata(address(QUOTE_TOKEN)).decimals();
+        uint8 sectorDecimals = SECTOR_TOKEN.decimals();
+
+        // Calculate scaling factor to convert quote decimals to sector token decimals
+        uint256 decimalScaling;
+        if (sectorDecimals >= quoteDecimals) {
+            decimalScaling = 10 ** (sectorDecimals - quoteDecimals);
+        } else {
+            // This case is unusual but handle it for completeness
+            decimalScaling = 1;
         }
 
-        // Calculate NAV: total value of all underlying tokens in vault (6 decimals USDC)
+        // First deposit: 1:1 ratio with decimal conversion
+        if (totalShares == 0) {
+            return quoteAmount * decimalScaling;
+        }
+
+        // Calculate NAV: total value of all underlying tokens in vault (in oracle decimals)
         uint256 totalValue = getTotalValue();
 
         // Subsequent deposits: shares = (quoteAmount * totalShares) / totalValue
         // This maintains proportional ownership
         if (totalValue == 0) {
             // If vault has shares but no value, treat as first deposit
-            return quoteAmount;
+            return quoteAmount * decimalScaling;
         }
 
-        // Normalize: quoteAmount is 18 decimals, totalValue is 6 decimals
-        // Convert quoteAmount to 6 decimals to match totalValue
-        uint256 quoteAmountNormalized = quoteAmount / 1e12; // 18 decimals -> 6 decimals
+        // Oracle returns value in oracle decimals (typically 6 for USDC-based pricing)
+        // Need to normalize quoteAmount and totalValue to same decimal base for comparison
+        uint8 oracleDecimals = oracle.decimals();
 
-        return (quoteAmountNormalized * totalShares) / totalValue;
+        // Normalize quoteAmount to oracle decimals for fair comparison
+        uint256 normalizedQuoteAmount;
+        if (quoteDecimals >= oracleDecimals) {
+            normalizedQuoteAmount = quoteAmount / (10 ** (quoteDecimals - oracleDecimals));
+        } else {
+            normalizedQuoteAmount = quoteAmount * (10 ** (oracleDecimals - quoteDecimals));
+        }
+
+        // Now both normalizedQuoteAmount and totalValue are in oracle decimals
+        // shares = (normalizedQuoteAmount / totalValue) * totalShares
+        // Result is in sector token decimals (matches totalShares decimals)
+        return (normalizedQuoteAmount * totalShares) / totalValue;
     }
 
     /**

@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// ERC20 ABI (approve and transfer functions)
+// ERC20 ABI (approve, allowance, and balanceOf functions)
 const ERC20ABI = `[
 	{
 		"constant": false,
@@ -18,6 +18,16 @@ const ERC20ABI = `[
 		],
 		"name": "approve",
 		"outputs": [{"name": "", "type": "bool"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{"name": "owner", "type": "address"},
+			{"name": "spender", "type": "address"}
+		],
+		"name": "allowance",
+		"outputs": [{"name": "", "type": "uint256"}],
 		"type": "function"
 	},
 	{

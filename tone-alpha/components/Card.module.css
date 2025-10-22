@@ -231,4 +231,19 @@
 .tokenSymbol {
   color: #4d9eff;
   font-weight: 500;
+  flex: 0 0 auto;
+}
+
+.tokenBalance {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  flex: 1 1 auto;
+  margin-left: auto;
+}
+
+.tokenWeight {
+  opacity: 0.6;
+  font-size: 12px;
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
 }

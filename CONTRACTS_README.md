@@ -199,13 +199,23 @@ The vault uses oracle-based NAV calculation for fair share pricing:
 
 ## Contract Addresses (Base Sepolia)
 
-> Update after deployment
+### Core Contracts
+- **SectorVault**: [`0x629Eea75B6932bC214fF9486bcA86012483771C1`](https://sepolia.basescan.org/address/0x629Eea75B6932bC214fF9486bcA86012483771C1)
+- **SectorToken (AI)**: [`0x4929A55D1FE9d99fea2589A51812BEb858A7cce6`](https://sepolia.basescan.org/address/0x4929A55D1FE9d99fea2589A51812BEb858A7cce6)
+- **MockOracle**: [`0x74148B54A83a34E524D54519655CB70aeCa29087`](https://sepolia.basescan.org/address/0x74148B54A83a34E524D54519655CB70aeCa29087)
+- **Quote Token (USDC)**: [`0x036CbD53842c5426634e7929541eC2318f3dCF7e`](https://sepolia.basescan.org/address/0x036cbd53842c5426634e7929541ec2318f3dcf7e)
 
-- **SectorVault**: `TBD`
-- **SectorToken**: `TBD`
-- **MockOracle**: `TBD`
-- **Quote Token (USDC)**: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
-- **AI Sector Tokens**: 10 mock tokens (0X0, ARKM, FET, KAITO, NEAR, NOS, PAAL, RENDER, TAO, VIRTUAL)
+### AI Sector Tokens (10 Mock Tokens)
+- **0X0**: [`0xa211A5cfE0e439335B05c6Ed395B7620CEd96f47`](https://sepolia.basescan.org/address/0xa211A5cfE0e439335B05c6Ed395B7620CEd96f47)
+- **ARKM**: [`0x6303a6970B556Ad28716Dd121168a0E24Ad04991`](https://sepolia.basescan.org/address/0x6303a6970B556Ad28716Dd121168a0E24Ad04991)
+- **FET**: [`0x4e34e52228F463177d004C0AB182c93245cd8699`](https://sepolia.basescan.org/address/0x4e34e52228F463177d004C0AB182c93245cd8699)
+- **KAITO**: [`0xE0d85812f9eFc36c5678526c22dFD4D9053F8761`](https://sepolia.basescan.org/address/0xE0d85812f9eFc36c5678526c22dFD4D9053F8761)
+- **NEAR**: [`0xFa062193e84fB02bf9851db2F162983164f4Afa7`](https://sepolia.basescan.org/address/0xFa062193e84fB02bf9851db2F162983164f4Afa7)
+- **NOS**: [`0xE461cD97A8Ca854b4bB146715FE76A27E211C264`](https://sepolia.basescan.org/address/0xE461cD97A8Ca854b4bB146715FE76A27E211C264)
+- **PAAL**: [`0x1dA3225323123012250A3A8904ED52Fb37B7dB9E`](https://sepolia.basescan.org/address/0x1dA3225323123012250A3A8904ED52Fb37B7dB9E)
+- **RENDER**: [`0xffC8eaAa6471846e70E1EA57d2Be985B5e25E8dc`](https://sepolia.basescan.org/address/0xffC8eaAa6471846e70E1EA57d2Be985B5e25E8dc)
+- **TAO**: [`0x0C22b7Ae4863C51A9404a50dCcdB8c887FcB1736`](https://sepolia.basescan.org/address/0x0C22b7Ae4863C51A9404a50dCcdB8c887FcB1736)
+- **VIRTUAL**: [`0x14326A86AD69769f0A7C917492ABB807cA8BC25A`](https://sepolia.basescan.org/address/0x14326A86AD69769f0A7C917492ABB807cA8BC25A)
 
 ## Key Features (Alpha)
 

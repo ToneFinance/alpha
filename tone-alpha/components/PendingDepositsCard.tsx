@@ -1,12 +1,18 @@
 "use client";
 
 import { useAccount } from "wagmi";
-import { useNextDepositId, usePendingDeposit, formatTokenAmount } from "../lib/hooks/useSectorVault";
+import { useNextDepositId, usePendingDeposit, formatTokenAmount, useTokenMetadata } from "../lib/hooks/useSectorVault";
+import { CONTRACTS } from "../lib/contracts";
 import styles from "./Card.module.css";
 
 export function PendingDepositsCard() {
   const { address, isConnected } = useAccount();
   const { nextDepositId, refetch: refetchNextDepositId } = useNextDepositId();
+
+  // Fetch dynamic token metadata from configured addresses
+  const quoteToken = useTokenMetadata(CONTRACTS.USDC);
+  const quoteDecimals = quoteToken.decimals ?? 6;
+  const quoteSymbol = quoteToken.symbol ?? "USDC";
 
   if (!isConnected) {
     return (
@@ -47,6 +53,8 @@ export function PendingDepositsCard() {
               key={depositId.toString()}
               depositId={depositId}
               userAddress={address}
+              quoteSymbol={quoteSymbol}
+              quoteDecimals={quoteDecimals}
             />
           ))}
         </div>
@@ -55,7 +63,17 @@ export function PendingDepositsCard() {
   );
 }
 
-function PendingDepositItem({ depositId, userAddress }: { depositId: bigint; userAddress: string | undefined }) {
+function PendingDepositItem({
+  depositId,
+  userAddress,
+  quoteSymbol,
+  quoteDecimals,
+}: {
+  depositId: bigint;
+  userAddress: string | undefined;
+  quoteSymbol: string;
+  quoteDecimals: number;
+}) {
   const { pendingDeposit } = usePendingDeposit(depositId);
 
   if (!pendingDeposit || !userAddress) {
@@ -76,7 +94,7 @@ function PendingDepositItem({ depositId, userAddress }: { depositId: bigint; use
     <div className={styles.balanceInfo} style={{ flexDirection: "column", alignItems: "flex-start", gap: "8px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
         <span style={{ fontSize: "12px", opacity: 0.7 }}>Deposit #{depositId.toString()}</span>
-        <span className={styles.balance}>{formatTokenAmount(quoteAmount, 6)} USDC</span>
+        <span className={styles.balance}>{formatTokenAmount(quoteAmount, quoteDecimals)} {quoteSymbol}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: "12px", opacity: 0.6 }}>
         <span>{timeAgo}</span>

@@ -7,7 +7,9 @@ import {
   useWithdraw,
   formatTokenAmount,
   parseTokenAmount,
+  useTokenMetadata,
 } from "../lib/hooks/useSectorVault";
+import { CONTRACTS } from "../lib/contracts";
 import styles from "./Card.module.css";
 
 export function WithdrawCard() {
@@ -17,7 +19,12 @@ export function WithdrawCard() {
   const { sectorTokenBalance, refetchAll } = useSectorVault();
   const { withdraw, isPending, isConfirming, isSuccess } = useWithdraw();
 
-  const amountBigInt = amount ? parseTokenAmount(amount, 18) : 0n;
+  // Fetch dynamic token metadata from configured addresses
+  const sectorToken = useTokenMetadata(CONTRACTS.SECTOR_TOKEN);
+  const sectorDecimals = sectorToken.decimals ?? 18;
+  const sectorSymbol = sectorToken.symbol ?? "Sector Token";
+
+  const amountBigInt = amount ? parseTokenAmount(amount, sectorDecimals) : 0n;
 
   const handleWithdraw = () => {
     if (!amountBigInt) return;
@@ -26,7 +33,7 @@ export function WithdrawCard() {
 
   const handleMax = () => {
     if (sectorTokenBalance) {
-      setAmount(formatTokenAmount(sectorTokenBalance, 18));
+      setAmount(formatTokenAmount(sectorTokenBalance, sectorDecimals));
     }
   };
 
@@ -51,18 +58,18 @@ export function WithdrawCard() {
     <div className={styles.card}>
       <h2>Withdraw</h2>
       <p className={styles.description}>
-        Burn sector tokens to receive your proportional share of underlying tokens
+        Burn {sectorSymbol} to receive your proportional share of underlying tokens
       </p>
 
       <div className={styles.balanceInfo}>
-        <span>Your Sector Tokens:</span>
+        <span>Your {sectorSymbol}:</span>
         <span className={styles.balance}>
-          {sectorTokenBalance ? formatTokenAmount(sectorTokenBalance, 18) : "0"} DEFI
+          {sectorTokenBalance ? formatTokenAmount(sectorTokenBalance, sectorDecimals) : "0"} {sectorSymbol}
         </span>
       </div>
 
       <div className={styles.inputGroup}>
-        <label htmlFor="withdrawAmount">Amount (Sector Tokens)</label>
+        <label htmlFor="withdrawAmount">Amount ({sectorSymbol})</label>
         <div className={styles.inputWrapper}>
           <input
             id="withdrawAmount"
