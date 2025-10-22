@@ -43,13 +43,6 @@ export function VaultInfo() {
   const quoteSymbol = quoteToken.symbol ?? "USDC";
   const quoteDecimals = quoteToken.decimals ?? 6;
 
-  // Debug logging
-  console.log("TVL Debug:", {
-    totalValue: totalValue?.toString(),
-    quoteDecimals,
-    vaultBalances: vaultBalances?.[1]?.map(b => b.toString())
-  });
-
   return (
     <div className={styles.infoCard}>
       <h2>{sectorToken.name || "Sector Vault"}</h2>

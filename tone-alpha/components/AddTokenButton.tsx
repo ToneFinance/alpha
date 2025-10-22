@@ -44,7 +44,7 @@ export function AddTokenButton() {
       className={styles.addTokenButton}
       disabled={!walletClient || !symbol || decimals === undefined}
     >
-      + Add {symbol || "Token"} to Wallet
+      {`+ Add ${symbol || "Token"} to Wallet`}
     </button>
   );
 }
