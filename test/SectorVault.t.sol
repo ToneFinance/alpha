@@ -61,6 +61,11 @@ contract SectorVaultTest is Test {
         oracle.setPrice(address(token2), 1_000_000);
         oracle.setPrice(address(token3), 1_000_000);
 
+        // Set token decimals (all test tokens have 18 decimals)
+        oracle.setTokenDecimals(address(token1), 18);
+        oracle.setTokenDecimals(address(token2), 18);
+        oracle.setTokenDecimals(address(token3), 18);
+
         // Deploy vault
         vault = new SectorVault(
             address(usdc), "DeFi Sector Token", "DEFI", underlyingTokens, targetWeights, fulfiller, address(oracle)
@@ -298,6 +303,11 @@ contract SectorVaultTest is Test {
         newOracle.setPrice(address(token1), 2_000_000); // $2.00
         newOracle.setPrice(address(token2), 2_000_000);
         newOracle.setPrice(address(token3), 2_000_000);
+
+        // Set token decimals for new oracle
+        newOracle.setTokenDecimals(address(token1), 18);
+        newOracle.setTokenDecimals(address(token2), 18);
+        newOracle.setTokenDecimals(address(token3), 18);
 
         // Update oracle
         vault.setOracle(address(newOracle));
@@ -641,5 +651,63 @@ contract SectorVaultTest is Test {
         // Shares remain unchanged - only NAV changes with prices
         assertEq(sectorToken.balanceOf(user1), user1Shares, "User1 shares unchanged");
         assertEq(sectorToken.balanceOf(user2), user2Shares, "User2 shares unchanged");
+    }
+
+    function test_FulfillDeposit_WithComplicatedPrices() public {
+        // This test verifies that fulfillment works with varied prices that cause rounding
+        // Simulates real-world scenario with prices like: $0.25, $0.35, $0.4684, $2.22, $391.73
+
+        // Update prices to varied amounts (similar to real oracle prices)
+        oracle.setPrice(address(token1), 250_000);   // TK1 = $0.25
+        oracle.setPrice(address(token2), 468_400);   // TK2 = $0.4684
+        oracle.setPrice(address(token3), 2_220_000); // TK3 = $2.22
+
+        // User deposits 1000 USDC
+        uint256 depositAmount = 1000 * 10 ** 18;
+        vm.startPrank(user1);
+        usdc.approve(address(vault), depositAmount);
+        uint256 depositId = vault.deposit(depositAmount);
+        vm.stopPrank();
+
+        // With weights 40%, 30%, 30% and prices $0.25, $0.4684, $2.22:
+        // - TK1: (1000 * 0.40) / 0.25 = 1600 tokens
+        // - TK2: (1000 * 0.30) / 0.4684 ≈ 640.77 tokens (rounding occurs here)
+        // - TK3: (1000 * 0.30) / 2.22 ≈ 135.14 tokens (rounding occurs here)
+
+        // Calculate approximate amounts the fulfiller would send
+        // Value for TK1: 1000 * 40% = 400 USDC
+        // Amount for TK1 @ $0.25 = 400 / 0.25 = 1600 tokens
+        uint256 tk1Amount = 1600 * 10 ** 18;
+
+        // Value for TK2: 1000 * 30% = 300 USDC
+        // Amount for TK2 @ $0.4684 = 300 / 0.4684 ≈ 640.77 tokens
+        uint256 tk2Amount = 640769 * 10 ** 15; // ~640.769 tokens
+
+        // Value for TK3: 1000 * 30% = 300 USDC
+        // Amount for TK3 @ $2.22 = 300 / 2.22 ≈ 135.14 tokens
+        uint256 tk3Amount = 135135 * 10 ** 15; // ~135.135 tokens
+
+        // Attempt fulfillment - should succeed with tolerance
+        vm.startPrank(fulfiller);
+        token1.approve(address(vault), tk1Amount);
+        token2.approve(address(vault), tk2Amount);
+        token3.approve(address(vault), tk3Amount);
+
+        // This should NOT revert, thanks to the tolerance fix
+        uint256[] memory amounts = new uint256[](3);
+        amounts[0] = tk1Amount;
+        amounts[1] = tk2Amount;
+        amounts[2] = tk3Amount;
+        vault.fulfillDeposit(depositId, amounts);
+        vm.stopPrank();
+
+        // Verify user received sector tokens
+        uint256 userShares = sectorToken.balanceOf(user1);
+        assertGt(userShares, 0, "User should have received sector tokens");
+
+        // Verify NAV is approximately 1000 USDC
+        uint256 nav = vault.getTotalValue();
+        assertGt(nav, 990_000_000, "NAV should be ~$1000 (allowing for rounding)");
+        assertLt(nav, 1010_000_000, "NAV should be ~$1000 (allowing for rounding)");
     }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSectorVault, formatTokenAmount, useTokenMetadata, useTargetWeight } from "../lib/hooks/useSectorVault";
+import { formatUnits } from "viem";
 import { CONTRACTS } from "../lib/contracts";
 import { AddTokenButton } from "./AddTokenButton";
 import styles from "./Card.module.css";
@@ -57,7 +58,7 @@ export function VaultInfo() {
         <div className={styles.statItem}>
           <span className={styles.statLabel}>Total Value Locked (TVL)</span>
           <span className={styles.statValue} style={{ fontVariantNumeric: "tabular-nums" }}>
-            {totalValue ? formatTokenAmount(totalValue, quoteDecimals) : "0"} {quoteSymbol}
+            {totalValue ? parseFloat(formatUnits(totalValue, quoteDecimals)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} {quoteSymbol}
           </span>
         </div>
       </div>

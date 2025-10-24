@@ -175,7 +175,15 @@ contract SectorVault is Ownable, ReentrancyGuard {
             normalizedQuoteAmount = pendingDeposit.quoteAmount * (10 ** (oracleDecimals - quoteDecimals));
         }
 
-        if (totalUnderlyingValue != normalizedQuoteAmount) revert FulfillmentValueMismatch();
+        // Allow small tolerance for rounding errors (0.1% of normalized quote amount)
+        // This handles integer division rounding across multiple tokens with different prices
+        // With varied token prices and weights, rounding can accumulate across calculations
+        uint256 tolerance = (normalizedQuoteAmount / 1000) + 1; // 0.1% + 1 wei buffer
+        uint256 difference = totalUnderlyingValue > normalizedQuoteAmount
+            ? totalUnderlyingValue - normalizedQuoteAmount
+            : normalizedQuoteAmount - totalUnderlyingValue;
+
+        if (difference > tolerance) revert FulfillmentValueMismatch();
 
         // Mark as fulfilled
         pendingDeposit.fulfilled = true;

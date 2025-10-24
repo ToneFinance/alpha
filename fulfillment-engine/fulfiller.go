@@ -428,7 +428,7 @@ func (f *Fulfiller) sendTransaction(ctx context.Context, to common.Address, valu
 		return nil, err
 	}
 
-	tx := types.NewTransaction(nonce, to, value, 800000, gasPrice, data)
+	tx := types.NewTransaction(nonce, to, value, 8000000, gasPrice, data)
 
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), f.privateKey)
 	if err != nil {

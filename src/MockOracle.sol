@@ -15,13 +15,18 @@ contract MockOracle is IPriceOracle {
     /// @notice Mapping of token address to price in USDC (with 6 decimals)
     mapping(address => uint256) public prices;
 
+    /// @notice Mapping of token address to its decimals
+    mapping(address => uint8) public tokenDecimals;
+
     /// @notice Owner who can set prices
     address public owner;
 
     event PriceUpdated(address indexed token, uint256 price);
+    event TokenDecimalsUpdated(address indexed token, uint8 decimals);
 
     error Unauthorized();
     error InvalidPrice();
+    error InvalidDecimals();
 
     modifier onlyOwner() {
         _checkOwner();
@@ -62,6 +67,31 @@ contract MockOracle is IPriceOracle {
     }
 
     /**
+     * @notice Set decimals for a token
+     * @param token Address of the token
+     * @param tokenDec Number of decimals for the token
+     */
+    function setTokenDecimals(address token, uint8 tokenDec) external onlyOwner {
+        if (tokenDec == 0) revert InvalidDecimals();
+        tokenDecimals[token] = tokenDec;
+        emit TokenDecimalsUpdated(token, tokenDec);
+    }
+
+    /**
+     * @notice Batch set decimals for multiple tokens
+     * @param tokens Array of token addresses
+     * @param tokenDecs Array of decimal values
+     */
+    function setTokenDecimalsBatch(address[] calldata tokens, uint8[] calldata tokenDecs) external onlyOwner {
+        require(tokens.length == tokenDecs.length, "Length mismatch");
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokenDecs[i] == 0) revert InvalidDecimals();
+            tokenDecimals[tokens[i]] = tokenDecs[i];
+            emit TokenDecimalsUpdated(tokens[i], tokenDecs[i]);
+        }
+    }
+
+    /**
      * @notice Get price for a token
      * @param token Address of the token
      * @return price Price in USDC (with 6 decimals)
@@ -82,10 +112,14 @@ contract MockOracle is IPriceOracle {
         uint256 price = prices[token];
         if (price == 0) revert InvalidPrice();
 
-        // Simple calculation: (amount * price) / 10^18
-        // Assumes tokens have 18 decimals, price has 6 decimals
+        uint8 tokenDec = tokenDecimals[token];
+        if (tokenDec == 0) revert InvalidDecimals();
+
+        // Proper calculation accounting for token decimals:
+        // (amount * price) / 10^tokenDec
+        // amount is in token decimals, price is in 6 decimals (USDC)
         // Result has 6 decimals (USDC decimals)
-        return (amount * price) / 1e18;
+        return (amount * price) / (10 ** tokenDec);
     }
 
     /**

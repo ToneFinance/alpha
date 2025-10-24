@@ -42,11 +42,14 @@ contract DeploySectorVault is Script {
 
         // Set all token prices to 1 USDC (1000000 with 6 decimals)
         uint256[] memory prices = new uint256[](underlyingTokens.length);
+        uint8[] memory decimals = new uint8[](underlyingTokens.length);
         for (uint256 i = 0; i < underlyingTokens.length; i++) {
             prices[i] = 1_000_000; // $1.00 in 6 decimals
+            decimals[i] = 18; // All mock tokens have 18 decimals
         }
         oracle.setPrices(underlyingTokens, prices);
-        console.log("Set all token prices to $1.00");
+        oracle.setTokenDecimalsBatch(underlyingTokens, decimals);
+        console.log("Set all token prices to $1.00 and decimals to 18");
 
         // Deploy vault
         SectorVault vault = new SectorVault(
