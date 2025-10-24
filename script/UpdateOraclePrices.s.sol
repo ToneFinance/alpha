@@ -8,7 +8,7 @@ import {MockOracle} from "../src/MockOracle.sol";
  * @title UpdateOraclePrices
  * @notice Script to update mock oracle prices to real-world values
  * @dev Run with: forge script script/UpdateOraclePrices.s.sol:UpdateOraclePrices --rpc-url base_sepolia --broadcast
- * @dev Prices fetched on October 22, 2025
+ * @dev Prices fetched on October 24, 2025
  */
 contract UpdateOraclePrices is Script {
     // MockOracle address from deployment
@@ -51,18 +51,18 @@ contract UpdateOraclePrices is Script {
         tokens[8] = TAO;
         tokens[9] = VIRTUAL;
 
-        // Real-world prices as of October 22, 2025 (with 6 decimals)
+        // Real-world prices as of October 24, 2025 (with 6 decimals)
         uint256[] memory prices = new uint256[](10);
         prices[0] = 250_000;      // 0X0 (ZRX): $0.25
-        prices[1] = 350_629;      // ARKM: $0.350629
+        prices[1] = 357_894;      // ARKM: $0.357894
         prices[2] = 250_000;      // FET: $0.25
-        prices[3] = 1_020_000;    // KAITO: $1.02
-        prices[4] = 2_220_000;    // NEAR: $2.22
-        prices[5] = 468_400;      // NOS: $0.4684
-        prices[6] = 40_540;       // PAAL: $0.04054
-        prices[7] = 2_450_000;    // RENDER: $2.45
-        prices[8] = 391_730_000;  // TAO: $391.73
-        prices[9] = 1_050_000;    // VIRTUAL: $1.05
+        prices[3] = 1_040_000;    // KAITO: $1.04
+        prices[4] = 2_200_000;    // NEAR: $2.20
+        prices[5] = 434_900;      // NOS: $0.4349
+        prices[6] = 40_000;       // PAAL: $0.04
+        prices[7] = 2_470_000;    // RENDER: $2.47
+        prices[8] = 386_035_230;  // TAO: $386.035230
+        prices[9] = 1_300_000;    // VIRTUAL: $1.30
 
         // Set token decimals (all are 18 decimals)
         uint8[] memory decimals = new uint8[](10);
@@ -74,17 +74,17 @@ contract UpdateOraclePrices is Script {
         // Update prices
         oracle.setPrices(tokens, prices);
 
-        console.log("\n=== Real-World Prices Updated (Oct 22, 2025) ===");
+        console.log("\n=== Real-World Prices Updated (Oct 24, 2025) ===");
         console.log("0X0 (ZRX) price set to $0.25");
-        console.log("ARKM price set to $0.350629");
+        console.log("ARKM price set to $0.357894");
         console.log("FET price set to $0.25");
-        console.log("KAITO price set to $1.02");
-        console.log("NEAR price set to $2.22");
-        console.log("NOS price set to $0.4684");
-        console.log("PAAL price set to $0.04054");
-        console.log("RENDER price set to $2.45");
-        console.log("TAO price set to $391.73");
-        console.log("VIRTUAL price set to $1.05");
+        console.log("KAITO price set to $1.04");
+        console.log("NEAR price set to $2.20");
+        console.log("NOS price set to $0.4349");
+        console.log("PAAL price set to $0.04");
+        console.log("RENDER price set to $2.47");
+        console.log("TAO price set to $386.035230");
+        console.log("VIRTUAL price set to $1.30");
         console.log("\nAll token decimals set to 18");
 
         vm.stopBroadcast();
