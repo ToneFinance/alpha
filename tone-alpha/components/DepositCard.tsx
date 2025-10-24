@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAccount } from "wagmi";
+import confetti from "canvas-confetti";
 import {
   useSectorVault,
   useApproveUsdc,
@@ -79,6 +80,18 @@ export function DepositCard() {
   useEffect(() => {
     if (isDeposited && !hasHandledDepositRef.current) {
       hasHandledDepositRef.current = true;
+
+      // Trigger confetti celebration
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ["#667eea", "#764ba2", "#ffa500"],
+        startVelocity: 30,
+        gravity: 0.7,
+        decay: 0.94,
+      });
+
       // Immediately refetch to show the pending deposit
       refetchAll();
 

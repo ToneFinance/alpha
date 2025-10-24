@@ -80,15 +80,7 @@ export default function Home() {
             Website
           </a>
           <a
-            href="https://docs.base.org"
-            target="_blank"
-            rel="noreferrer"
-            className={styles.footerLink}
-          >
-            Docs
-          </a>
-          <a
-            href="https://github.com"
+            href="https://github.com/ToneFinance"
             target="_blank"
             rel="noreferrer"
             className={styles.footerLink}
