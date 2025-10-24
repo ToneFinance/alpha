@@ -18,12 +18,13 @@ interface DepositFormContentProps {
 
 export function DepositFormContent({ onDepositSuccess }: DepositFormContentProps) {
   const [amount, setAmount] = useState("");
+  const [displayError, setDisplayError] = useState<string | null>(null);
   const depositAmountRef = useRef<bigint>(0n);
   const hasTriggeredDepositRef = useRef(false);
 
   const { usdcBalance, usdcAllowance, refetchAll } = useSectorVault();
-  const { approve, isPending: isApproving, isConfirming: isApprovingConfirming, isSuccess: isApproved, hash: approveHash } = useApproveUsdc();
-  const { deposit, isPending: isDepositing, isConfirming: isDepositingConfirming, isSuccess: isDeposited } = useDeposit();
+  const { approve, isPending: isApproving, isConfirming: isApprovingConfirming, isSuccess: isApproved, hash: approveHash, isError: approveError, error: approveErrorMsg } = useApproveUsdc();
+  const { deposit, isPending: isDepositing, isConfirming: isDepositingConfirming, isSuccess: isDeposited, isError: depositError, error: depositErrorMsg } = useDeposit();
 
   // Fetch dynamic token metadata from configured addresses
   const quoteToken = useTokenMetadata(CONTRACTS.USDC);
@@ -59,13 +60,29 @@ export function DepositFormContent({ onDepositSuccess }: DepositFormContentProps
     }
   }, [isApproved, approveHash, deposit, refetchAll]);
 
+  // Handle approval errors
+  useEffect(() => {
+    if (approveError) {
+      setDisplayError(`Approval failed: ${approveErrorMsg?.message || "Unknown error"}`);
+    }
+  }, [approveError, approveErrorMsg]);
+
+  // Handle deposit errors
+  useEffect(() => {
+    if (depositError) {
+      setDisplayError(`Deposit failed: ${depositErrorMsg?.message || "Unknown error"}`);
+    }
+  }, [depositError, depositErrorMsg]);
+
   const handleApprove = () => {
     if (!amountBigInt) return;
+    setDisplayError(null);
     approve(amountBigInt);
   };
 
   const handleDeposit = () => {
     if (!amountBigInt) return;
+    setDisplayError(null);
     deposit(amountBigInt);
   };
 
@@ -128,6 +145,12 @@ export function DepositFormContent({ onDepositSuccess }: DepositFormContentProps
       {needsApproval && (
         <p className={styles.infoMessage}>
           First-time deposit requires 2 transactions: approve {quoteSymbol} spending, then deposit
+        </p>
+      )}
+
+      {displayError && (
+        <p className={styles.errorMessage}>
+          ⚠️ {displayError}
         </p>
       )}
 

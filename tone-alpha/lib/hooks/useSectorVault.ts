@@ -80,8 +80,9 @@ export function useSectorVault() {
  * Hook to handle USDC approval
  */
 export function useApproveUsdc() {
-  const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess, status } = useWaitForTransactionReceipt({ hash });
+  const isError = status === "error" || !!writeError;
 
   const approve = (amount: bigint) => {
     writeContract({
@@ -97,6 +98,8 @@ export function useApproveUsdc() {
     isPending,
     isConfirming,
     isSuccess,
+    isError,
+    error: writeError,
   };
 }
 
@@ -104,8 +107,9 @@ export function useApproveUsdc() {
  * Hook to handle deposits
  */
 export function useDeposit() {
-  const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({ hash });
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess, data: receipt, status } = useWaitForTransactionReceipt({ hash });
+  const isError = status === "error" || !!writeError;
 
   const deposit = (amount: bigint) => {
     writeContract({
@@ -122,6 +126,8 @@ export function useDeposit() {
     isConfirming,
     isSuccess,
     receipt,
+    isError,
+    error: writeError,
   };
 }
 

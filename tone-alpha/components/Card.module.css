@@ -159,6 +159,17 @@
   line-height: 1.5;
 }
 
+.errorMessage {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 67, 54, 0.1);
+  border: 1px solid rgba(255, 67, 54, 0.3);
+  border-radius: 8px;
+  color: #ff4336;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .connectMessage {
   text-align: center;
   color: var(--text-secondary);
