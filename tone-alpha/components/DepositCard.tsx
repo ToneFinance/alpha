@@ -17,6 +17,7 @@ export function DepositCard() {
   const { isConnected } = useAccount();
   const [amount, setAmount] = useState("");
   const depositAmountRef = useRef<bigint>(0n);
+  const hasHandledDepositRef = useRef(false);
 
   const { usdcBalance, usdcAllowance, refetchAll } = useSectorVault();
   const { approve, isPending: isApproving, isConfirming: isApprovingConfirming, isSuccess: isApproved, hash: approveHash } = useApproveUsdc();
@@ -76,13 +77,15 @@ export function DepositCard() {
 
   // Handle successful deposit
   useEffect(() => {
-    if (isDeposited) {
+    if (isDeposited && !hasHandledDepositRef.current) {
+      hasHandledDepositRef.current = true;
       // Immediately refetch to show the pending deposit
       refetchAll();
 
       // Reset form after a delay
       const timer = setTimeout(() => {
         setAmount("");
+        hasHandledDepositRef.current = false;
       }, 2000);
 
       return () => clearTimeout(timer);

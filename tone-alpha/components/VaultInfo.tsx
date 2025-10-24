@@ -1,7 +1,6 @@
 "use client";
 
-import { useSectorVault, formatTokenAmount, useTokenMetadata, useTargetWeight } from "../lib/hooks/useSectorVault";
-import { formatUnits } from "viem";
+import { useSectorVault, formatTokenAmount, formatTokenAmountTo2Decimals, useTokenMetadata, useTargetWeight } from "../lib/hooks/useSectorVault";
 import { CONTRACTS } from "../lib/contracts";
 import { AddTokenButton } from "./AddTokenButton";
 import styles from "./Card.module.css";
@@ -51,14 +50,14 @@ export function VaultInfo() {
       <div className={styles.statGrid}>
         <div className={styles.statItem}>
           <span className={styles.statLabel}>Total Supply</span>
-          <span className={styles.statValue}>
-            {totalSupply ? formatTokenAmount(totalSupply, sectorDecimals) : "0"} {sectorSymbol}
+          <span className={styles.statValue} style={{ fontVariantNumeric: "tabular-nums" }}>
+            {formatTokenAmountTo2Decimals(totalSupply, sectorDecimals)} {sectorSymbol}
           </span>
         </div>
         <div className={styles.statItem}>
           <span className={styles.statLabel}>Total Value Locked (TVL)</span>
           <span className={styles.statValue} style={{ fontVariantNumeric: "tabular-nums" }}>
-            {totalValue ? parseFloat(formatUnits(totalValue, quoteDecimals)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"} {quoteSymbol}
+            {formatTokenAmountTo2Decimals(totalValue, quoteDecimals)} {quoteSymbol}
           </span>
         </div>
       </div>

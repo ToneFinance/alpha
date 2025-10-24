@@ -268,6 +268,14 @@ export function parseTokenAmount(amount: string, decimals = 18): bigint {
 }
 
 /**
+ * Utility function to format token amounts to 2 decimal places with localization
+ */
+export function formatTokenAmountTo2Decimals(amount: bigint | undefined, decimals = 18): string {
+  if (!amount) return "0.00";
+  return parseFloat(formatUnits(amount, decimals)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
  * Hook to fetch target weight for a specific token
  */
 export function useTargetWeight(tokenAddress: string | undefined) {

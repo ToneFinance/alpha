@@ -8,6 +8,7 @@ import { PendingDepositsCard } from "../components/PendingDepositsCard";
 import Image from "next/image";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { useEffect } from "react";
+import { ArrowUpRight } from "lucide-react";
 
 export default function Home() {
   useEffect(() => {
@@ -30,7 +31,18 @@ export default function Home() {
             <div className={styles.logoSubtext}>On-Chain Sector Tokens</div>
           </div>
         </div>
-        <Wallet />
+        <div className={styles.headerActions}>
+          <a
+            href="https://tone.finance"
+            target="_blank"
+            rel="noreferrer"
+            className={styles.homepageLink}
+          >
+            <span>tone.finance</span>
+            <ArrowUpRight size={16} />
+          </a>
+          <Wallet />
+        </div>
       </header>
 
       <main className={styles.main}>
