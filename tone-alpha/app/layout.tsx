@@ -30,6 +30,27 @@ export const metadata: Metadata = {
     description: "Invest in diversified crypto sectors with on-chain ETF-like tokens on Base",
     images: ['/og-image.png'],
   },
+  other: {
+    "fc:frame": "vNext",
+    "fc:frame:image": "/og-image.png",
+    "fc:miniapp": JSON.stringify({
+      version: "1",
+      name: "Tone Finance",
+      url: "https://alpha.lab.tone.finance",
+      iconUrl: "https://alpha.lab.tone.finance/icon.png",
+      splashImageUrl: "https://alpha.lab.tone.finance/splash.png",
+      splashBackgroundColor: "#000000",
+      description: "Invest in diversified crypto sectors with on-chain ETF-like tokens. Deposit USDC, receive sector tokens representing a basket of DeFi assets.",
+      button: {
+        title: "Launch App",
+        action: {
+          type: "launch_miniapp",
+          name: "Tone Finance",
+          url: "https://alpha.lab.tone.finance",
+        },
+      },
+    }),
+  },
 };
 
 export default function RootLayout({
