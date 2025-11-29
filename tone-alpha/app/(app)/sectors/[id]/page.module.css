@@ -1,0 +1,129 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.sectorHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 40px;
+  width: 100%;
+}
+
+.sectorIcon {
+  font-size: 56px;
+  line-height: 1;
+}
+
+.title {
+  font-size: 36px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: var(--foreground);
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 700px;
+  line-height: 1.6;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 32px;
+  width: 100%;
+  margin-top: 40px;
+}
+
+.vaultInfoWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.comingSoon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.comingSoonIcon {
+  font-size: 80px;
+  margin-bottom: 24px;
+}
+
+.comingSoon h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+  color: var(--foreground);
+}
+
+.comingSoon p {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0 0 24px 0;
+  line-height: 1.6;
+}
+
+.comingSoonBadge {
+  background: rgba(255, 165, 0, 0.1);
+  border: 1px solid rgba(255, 165, 0, 0.3);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffa500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .title {
+    font-size: 28px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+  }
+
+  .sectorHeader {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .sectorIcon {
+    font-size: 48px;
+  }
+
+  .comingSoonIcon {
+    font-size: 64px;
+  }
+
+  .comingSoon h1 {
+    font-size: 24px;
+  }
+
+  .comingSoon p {
+    font-size: 14px;
+  }
+}
