@@ -258,3 +258,75 @@
   margin-left: 8px;
   font-variant-numeric: tabular-nums;
 }
+
+/* Withdrawal Type Selector */
+.typeSelector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.typeButton {
+  padding: 12px 16px;
+  background: var(--input-bg);
+  border: 2px solid var(--input-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.typeButton:hover {
+  border-color: rgba(77, 158, 255, 0.5);
+}
+
+.typeButton.active {
+  background: rgba(77, 158, 255, 0.1);
+  border-color: #4d9eff;
+}
+
+.typeButtonContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.typeButtonContent strong {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.typeHint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.typeButton.active .typeButtonContent strong {
+  color: #4d9eff;
+}
+
+.typeButton.active .typeHint {
+  color: #4d9eff;
+  opacity: 0.8;
+}
+
+/* Estimate Info */
+.estimateInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(77, 158, 255, 0.1);
+  border: 1px solid rgba(77, 158, 255, 0.3);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.estimateValue {
+  font-weight: 600;
+  color: #4d9eff;
+}

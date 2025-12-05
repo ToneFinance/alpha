@@ -187,6 +187,81 @@ export function useWithdraw(sector: SectorConfig) {
 }
 
 /**
+ * Hook to request USDC withdrawal (two-step process via fulfillment engine)
+ */
+export function useRequestWithdrawal(sector: SectorConfig) {
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const sectorVaultConfig = {
+    address: sector.vaultAddress,
+    abi: ABIS.SectorVault,
+  } as const;
+
+  const requestWithdrawal = (sharesAmount: bigint) => {
+    writeContract({
+      ...sectorVaultConfig,
+      functionName: "requestWithdrawal",
+      args: [sharesAmount],
+    });
+  };
+
+  return {
+    requestWithdrawal,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    writeError,
+  };
+}
+
+/**
+ * Hook to read a specific pending withdrawal for a sector
+ */
+export function usePendingWithdrawal(sector: SectorConfig, withdrawalId: bigint | undefined) {
+  const sectorVaultConfig = {
+    address: sector.vaultAddress,
+    abi: ABIS.SectorVault,
+  } as const;
+
+  const { data: pendingWithdrawal, refetch } = useReadContract({
+    ...sectorVaultConfig,
+    functionName: "pendingWithdrawals",
+    args: withdrawalId !== undefined ? [withdrawalId] : undefined,
+    query: {
+      refetchInterval: 3000, // Poll every 3 seconds
+    },
+  });
+
+  return {
+    pendingWithdrawal: pendingWithdrawal as [string, bigint, boolean, bigint] | undefined,
+    refetch,
+  };
+}
+
+/**
+ * Hook to calculate expected USDC value for withdrawing shares
+ */
+export function useCalculateWithdrawalValue(sector: SectorConfig, sharesAmount: bigint | undefined) {
+  const sectorVaultConfig = {
+    address: sector.vaultAddress,
+    abi: ABIS.SectorVault,
+  } as const;
+
+  const { data: usdcValue, refetch } = useReadContract({
+    ...sectorVaultConfig,
+    functionName: "calculateWithdrawalValue",
+    args: sharesAmount !== undefined && sharesAmount > 0n ? [sharesAmount] : undefined,
+  });
+
+  return {
+    usdcValue: usdcValue as bigint | undefined,
+    refetch,
+  };
+}
+
+/**
  * Hook to read a specific pending deposit for a sector
  */
 export function usePendingDeposit(sector: SectorConfig, depositId: bigint | undefined) {
