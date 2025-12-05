@@ -248,6 +248,128 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 	return nil
 }
 
+func (f *Fulfiller) FulfillWithdrawal(ctx context.Context, withdrawalId *big.Int, sharesAmount *big.Int) error {
+	// Track this in-flight operation
+	f.wg.Add(1)
+	defer f.wg.Done()
+
+	// Check if context is already cancelled before starting
+	select {
+	case <-ctx.Done():
+		Logger.Info("Withdrawal fulfillment cancelled before start",
+			"withdrawal_id", withdrawalId.String(),
+			"reason", ctx.Err(),
+		)
+		return ctx.Err()
+	default:
+	}
+
+	Logger.Info("Starting withdrawal fulfillment",
+		"withdrawal_id", withdrawalId.String(),
+		"shares_amount", sharesAmount.String(),
+	)
+
+	// Get vault balances to determine proportional withdrawal amounts
+	vaultBalances, err := f.getVaultBalances(ctx)
+	if err != nil {
+		Logger.Error("Failed to get vault balances",
+			"withdrawal_id", withdrawalId.String(),
+			"error", err,
+		)
+		return fmt.Errorf("failed to get vault balances: %v", err)
+	}
+
+	// Get total supply to calculate proportions
+	totalSupply, err := f.getSectorTokenTotalSupply(ctx)
+	if err != nil {
+		Logger.Error("Failed to get sector token total supply",
+			"withdrawal_id", withdrawalId.String(),
+			"error", err,
+		)
+		return fmt.Errorf("failed to get total supply: %v", err)
+	}
+
+	// Calculate proportional underlying amounts
+	// Formula: (vaultBalance * sharesAmount) / totalSupply
+	underlyingAmounts := make([]*big.Int, len(f.underlyingTokens))
+	for i := range f.underlyingTokens {
+		amount := new(big.Int).Div(
+			new(big.Int).Mul(vaultBalances[i], sharesAmount),
+			totalSupply,
+		)
+		underlyingAmounts[i] = amount
+
+		Logger.Debug("Calculated underlying token amount for withdrawal",
+			"withdrawal_id", withdrawalId.String(),
+			"token_index", i,
+			"token", f.underlyingTokens[i].Hex(),
+			"vault_balance", vaultBalances[i].String(),
+			"shares_amount", sharesAmount.String(),
+			"total_supply", totalSupply.String(),
+			"amount", amount.String(),
+		)
+	}
+
+	// Ensure USDC has max approval to vault
+	if err := f.ensureTokenApproval(ctx, f.quoteTokenAddress); err != nil {
+		Logger.Error("Failed to ensure USDC approval",
+			"withdrawal_id", withdrawalId.String(),
+			"error", err,
+		)
+		return fmt.Errorf("failed to ensure USDC approval: %v", err)
+	}
+
+	// Call fulfillWithdrawal on the vault
+	if err := f.callFulfillWithdrawal(ctx, withdrawalId, underlyingAmounts); err != nil {
+		Logger.Error("Failed to fulfill withdrawal",
+			"withdrawal_id", withdrawalId.String(),
+			"error", err,
+		)
+		return fmt.Errorf("failed to call fulfillWithdrawal: %v", err)
+	}
+
+	Logger.Info("Withdrawal fulfilled successfully",
+		"withdrawal_id", withdrawalId.String(),
+		"shares_amount", sharesAmount.String(),
+	)
+	return nil
+}
+
+func (f *Fulfiller) callFulfillWithdrawal(ctx context.Context, withdrawalId *big.Int, amounts []*big.Int) error {
+	parsedABI, _ := ParseSectorVaultABI()
+
+	data, err := parsedABI.Pack("fulfillWithdrawal", withdrawalId, amounts)
+	if err != nil {
+		return err
+	}
+
+	tx, err := f.sendTransaction(ctx, f.config.SectorVault, big.NewInt(0), data)
+	if err != nil {
+		return err
+	}
+
+	Logger.Info("Fulfill withdrawal transaction sent",
+		"withdrawal_id", withdrawalId.String(),
+		"tx_hash", tx.Hash().Hex(),
+	)
+
+	// Wait for transaction to be mined
+	if err := f.waitForTransaction(ctx, tx); err != nil {
+		Logger.Error("Fulfill withdrawal transaction failed",
+			"withdrawal_id", withdrawalId.String(),
+			"tx_hash", tx.Hash().Hex(),
+			"error", err,
+		)
+		return err
+	}
+
+	Logger.Debug("Fulfill withdrawal transaction confirmed",
+		"withdrawal_id", withdrawalId.String(),
+		"tx_hash", tx.Hash().Hex(),
+	)
+	return nil
+}
+
 // ensureTokenApproval ensures a token has max approval, only approving once per token
 func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Address) error {
 	// Check if already approved in memory
@@ -791,4 +913,147 @@ func (f *Fulfiller) getTokenDecimals(ctx context.Context, token common.Address) 
 	}
 
 	return decimals, nil
+}
+
+// getVaultBalances fetches the current balances of all underlying tokens in the vault
+func (f *Fulfiller) getVaultBalances(ctx context.Context) ([]*big.Int, error) {
+	parsedABI, err := ParseSectorVaultABI()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := parsedABI.Pack("getVaultBalances")
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.config.SectorVault,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var output struct {
+		Tokens   []common.Address
+		Balances []*big.Int
+	}
+
+	err = parsedABI.UnpackIntoInterface(&output, "getVaultBalances", result)
+	if err != nil {
+		return nil, err
+	}
+
+	return output.Balances, nil
+}
+
+// getSectorTokenTotalSupply fetches the total supply of sector tokens
+func (f *Fulfiller) getSectorTokenTotalSupply(ctx context.Context) (*big.Int, error) {
+	// First get the sector token address
+	parsedVaultABI, err := ParseSectorVaultABI()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := parsedVaultABI.Pack("SECTOR_TOKEN")
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.config.SectorVault,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var sectorTokenAddr common.Address
+	err = parsedVaultABI.UnpackIntoInterface(&sectorTokenAddr, "SECTOR_TOKEN", result)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now call totalSupply on the sector token
+	parsedERC20ABI, err := ParseERC20ABI()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err = parsedERC20ABI.Pack("totalSupply")
+	if err != nil {
+		return nil, err
+	}
+
+	result, err = f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &sectorTokenAddr,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalSupply *big.Int
+	err = parsedERC20ABI.UnpackIntoInterface(&totalSupply, "totalSupply", result)
+	if err != nil {
+		return nil, err
+	}
+
+	return totalSupply, nil
+}
+
+func (f *Fulfiller) GetNextWithdrawalId(ctx context.Context) (*big.Int, error) {
+	parsedABI, _ := ParseSectorVaultABI()
+
+	data, err := parsedABI.Pack("nextWithdrawalId")
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.config.SectorVault,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var nextWithdrawalId *big.Int
+	err = parsedABI.UnpackIntoInterface(&nextWithdrawalId, "nextWithdrawalId", result)
+	if err != nil {
+		return nil, err
+	}
+
+	return nextWithdrawalId, nil
+}
+
+func (f *Fulfiller) GetPendingWithdrawal(ctx context.Context, withdrawalId *big.Int) (*PendingWithdrawal, error) {
+	parsedABI, _ := ParseSectorVaultABI()
+
+	data, err := parsedABI.Pack("pendingWithdrawals", withdrawalId)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.config.SectorVault,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var withdrawal PendingWithdrawal
+	err = parsedABI.UnpackIntoInterface(&[]interface{}{
+		&withdrawal.User,
+		&withdrawal.SharesAmount,
+		&withdrawal.Fulfilled,
+		&withdrawal.Timestamp,
+	}, "pendingWithdrawals", result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &withdrawal, nil
 }

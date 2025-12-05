@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// ERC20 ABI (approve, allowance, balanceOf, and decimals functions)
+// ERC20 ABI (approve, allowance, balanceOf, decimals, and totalSupply functions)
 const ERC20ABI = `[
 	{
 		"constant": false,
@@ -43,10 +43,17 @@ const ERC20ABI = `[
 		"name": "decimals",
 		"outputs": [{"name": "", "type": "uint8"}],
 		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "totalSupply",
+		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
 	}
 ]`
 
-// SectorVault ABI (pendingDeposits and fulfillDeposit functions)
+// SectorVault ABI (deposit and withdrawal functions)
 const SectorVaultABI = `[
 	{
 		"anonymous": false,
@@ -60,12 +67,33 @@ const SectorVaultABI = `[
 		"type": "event"
 	},
 	{
+		"anonymous": false,
+		"inputs": [
+			{"indexed": true, "name": "user", "type": "address"},
+			{"indexed": true, "name": "withdrawalId", "type": "uint256"},
+			{"indexed": false, "name": "sharesAmount", "type": "uint256"},
+			{"indexed": false, "name": "timestamp", "type": "uint256"}
+		],
+		"name": "WithdrawalRequested",
+		"type": "event"
+	},
+	{
 		"constant": false,
 		"inputs": [
 			{"name": "depositId", "type": "uint256"},
 			{"name": "underlyingAmounts", "type": "uint256[]"}
 		],
 		"name": "fulfillDeposit",
+		"outputs": [],
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{"name": "withdrawalId", "type": "uint256"},
+			{"name": "underlyingAmounts", "type": "uint256[]"}
+		],
+		"name": "fulfillWithdrawal",
 		"outputs": [],
 		"type": "function"
 	},
@@ -83,9 +111,52 @@ const SectorVaultABI = `[
 	},
 	{
 		"constant": true,
+		"inputs": [{"name": "", "type": "uint256"}],
+		"name": "pendingWithdrawals",
+		"outputs": [
+			{"name": "user", "type": "address"},
+			{"name": "sharesAmount", "type": "uint256"},
+			{"name": "fulfilled", "type": "bool"},
+			{"name": "timestamp", "type": "uint256"}
+		],
+		"type": "function"
+	},
+	{
+		"constant": true,
 		"inputs": [],
 		"name": "nextDepositId",
 		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "nextWithdrawalId",
+		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [{"name": "sharesAmount", "type": "uint256"}],
+		"name": "calculateWithdrawalValue",
+		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "getTotalValue",
+		"outputs": [{"name": "", "type": "uint256"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "getVaultBalances",
+		"outputs": [
+			{"name": "tokens", "type": "address[]"},
+			{"name": "balances", "type": "uint256[]"}
+		],
 		"type": "function"
 	},
 	{
@@ -113,6 +184,13 @@ const SectorVaultABI = `[
 		"constant": true,
 		"inputs": [],
 		"name": "QUOTE_TOKEN",
+		"outputs": [{"name": "", "type": "address"}],
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "SECTOR_TOKEN",
 		"outputs": [{"name": "", "type": "address"}],
 		"type": "function"
 	}
@@ -144,12 +222,28 @@ type DepositRequestedEvent struct {
 	Timestamp   *big.Int
 }
 
+// WithdrawalRequestedEvent represents the WithdrawalRequested event
+type WithdrawalRequestedEvent struct {
+	User         common.Address
+	WithdrawalId *big.Int
+	SharesAmount *big.Int
+	Timestamp    *big.Int
+}
+
 // PendingDeposit represents a pending deposit
 type PendingDeposit struct {
 	User        common.Address
 	QuoteAmount *big.Int
 	Fulfilled   bool
 	Timestamp   *big.Int
+}
+
+// PendingWithdrawal represents a pending withdrawal
+type PendingWithdrawal struct {
+	User         common.Address
+	SharesAmount *big.Int
+	Fulfilled    bool
+	Timestamp    *big.Int
 }
 
 func ParseERC20ABI() (abi.ABI, error) {

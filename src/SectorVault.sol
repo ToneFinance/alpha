@@ -50,6 +50,20 @@ contract SectorVault is Ownable, ReentrancyGuard {
     /// @notice Mapping of deposit ID to pending deposit
     mapping(uint256 => PendingDeposit) public pendingDeposits;
 
+    /// @notice Counter for withdrawal IDs
+    uint256 public nextWithdrawalId;
+
+    /// @notice Struct representing a pending withdrawal
+    struct PendingWithdrawal {
+        address user;
+        uint256 sharesAmount;
+        bool fulfilled;
+        uint256 timestamp;
+    }
+
+    /// @notice Mapping of withdrawal ID to pending withdrawal
+    mapping(uint256 => PendingWithdrawal) public pendingWithdrawals;
+
     // Events
     event DepositRequested(address indexed user, uint256 indexed depositId, uint256 quoteAmount, uint256 timestamp);
 
@@ -58,6 +72,16 @@ contract SectorVault is Ownable, ReentrancyGuard {
     event DepositCancelled(address indexed user, uint256 indexed depositId, uint256 quoteAmount);
 
     event Withdrawal(address indexed user, uint256 sharesAmount, address[] tokens, uint256[] amounts);
+
+    event WithdrawalRequested(
+        address indexed user, uint256 indexed withdrawalId, uint256 sharesAmount, uint256 timestamp
+    );
+
+    event WithdrawalFulfilled(
+        address indexed user, uint256 indexed withdrawalId, uint256 usdcAmount, uint256 timestamp
+    );
+
+    event WithdrawalCancelled(address indexed user, uint256 indexed withdrawalId, uint256 sharesAmount);
 
     event FulfillmentRoleUpdated(address indexed oldRole, address indexed newRole);
 
@@ -75,6 +99,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
     error InsufficientShares();
     error EmptyBasket();
     error FulfillmentValueMismatch();
+    error WithdrawalNotFound();
+    error WithdrawalAlreadyFulfilled();
+    error FulfillmentUSDCMismatch();
 
     /**
      * @notice Creates a new sector vault
@@ -262,6 +289,153 @@ contract SectorVault is Ownable, ReentrancyGuard {
         SECTOR_TOKEN.burn(msg.sender, sharesAmount);
 
         emit Withdrawal(msg.sender, sharesAmount, tokens, amounts);
+    }
+
+    /**
+     * @notice Request a USDC withdrawal by burning sector tokens
+     * @dev User's sector tokens remain with them until fulfillment
+     * @param sharesAmount Amount of sector tokens to withdraw
+     * @return withdrawalId ID of the pending withdrawal
+     */
+    function requestWithdrawal(uint256 sharesAmount) external nonReentrant returns (uint256 withdrawalId) {
+        if (sharesAmount == 0) revert InvalidAmount();
+        if (SECTOR_TOKEN.balanceOf(msg.sender) < sharesAmount) revert InsufficientShares();
+
+        // Create pending withdrawal (tokens stay with user until fulfillment)
+        withdrawalId = nextWithdrawalId++;
+        pendingWithdrawals[withdrawalId] = PendingWithdrawal({
+            user: msg.sender,
+            sharesAmount: sharesAmount,
+            fulfilled: false,
+            timestamp: block.timestamp
+        });
+
+        emit WithdrawalRequested(msg.sender, withdrawalId, sharesAmount, block.timestamp);
+    }
+
+    /**
+     * @notice Fulfill a pending withdrawal by providing USDC
+     * @dev Only callable by fulfillment role
+     * @param withdrawalId ID of the withdrawal to fulfill
+     * @param underlyingAmounts Array of underlying token amounts to transfer to fulfiller
+     */
+    function fulfillWithdrawal(uint256 withdrawalId, uint256[] calldata underlyingAmounts) external nonReentrant {
+        if (msg.sender != fulfillmentRole) revert UnauthorizedFulfillment();
+
+        PendingWithdrawal storage pendingWithdrawal = pendingWithdrawals[withdrawalId];
+        if (pendingWithdrawal.user == address(0)) revert WithdrawalNotFound();
+        if (pendingWithdrawal.fulfilled) revert WithdrawalAlreadyFulfilled();
+        if (underlyingAmounts.length != underlyingTokens.length) revert InvalidAmount();
+
+        // Calculate expected USDC value based on current NAV
+        uint256 expectedUSDC = calculateWithdrawalValue(pendingWithdrawal.sharesAmount);
+
+        // Get decimal info for validation
+        uint8 quoteDecimals = IERC20Metadata(address(QUOTE_TOKEN)).decimals();
+        uint8 oracleDecimals = oracle.decimals();
+
+        // Calculate the value of underlying tokens being withdrawn
+        uint256 totalUnderlyingValue = 0;
+        for (uint256 i = 0; i < underlyingTokens.length; i++) {
+            if (underlyingAmounts[i] > 0) {
+                totalUnderlyingValue += oracle.getValue(underlyingTokens[i], underlyingAmounts[i]);
+            }
+        }
+
+        // Normalize expected USDC to oracle decimals for comparison
+        uint256 normalizedExpectedUSDC;
+        if (quoteDecimals >= oracleDecimals) {
+            normalizedExpectedUSDC = expectedUSDC / (10 ** (quoteDecimals - oracleDecimals));
+        } else {
+            normalizedExpectedUSDC = expectedUSDC * (10 ** (oracleDecimals - quoteDecimals));
+        }
+
+        // Verify underlying value matches expected (with 0.1% tolerance)
+        uint256 tolerance = (normalizedExpectedUSDC / 1000) + 1;
+        uint256 difference = totalUnderlyingValue > normalizedExpectedUSDC
+            ? totalUnderlyingValue - normalizedExpectedUSDC
+            : normalizedExpectedUSDC - totalUnderlyingValue;
+
+        if (difference > tolerance) revert FulfillmentUSDCMismatch();
+
+        // Mark as fulfilled
+        pendingWithdrawal.fulfilled = true;
+
+        address user = pendingWithdrawal.user;
+        uint256 sharesAmount = pendingWithdrawal.sharesAmount;
+
+        // Transfer underlying tokens FROM vault TO fulfiller
+        for (uint256 i = 0; i < underlyingTokens.length; i++) {
+            if (underlyingAmounts[i] > 0) {
+                IERC20(underlyingTokens[i]).safeTransfer(msg.sender, underlyingAmounts[i]);
+            }
+        }
+
+        // Burn sector tokens from user
+        SECTOR_TOKEN.burn(user, sharesAmount);
+
+        // Transfer USDC FROM fulfiller TO user
+        QUOTE_TOKEN.safeTransferFrom(msg.sender, user, expectedUSDC);
+
+        emit WithdrawalFulfilled(user, withdrawalId, expectedUSDC, block.timestamp);
+
+        // Clean up: delete the withdrawal to save storage
+        delete pendingWithdrawals[withdrawalId];
+    }
+
+    /**
+     * @notice Cancel a pending withdrawal
+     * @dev Tokens were never transferred, so just delete the withdrawal request
+     * @param withdrawalId ID of the withdrawal to cancel
+     */
+    function cancelWithdrawal(uint256 withdrawalId) external nonReentrant {
+        PendingWithdrawal storage pendingWithdrawal = pendingWithdrawals[withdrawalId];
+        if (pendingWithdrawal.user == address(0)) revert WithdrawalNotFound();
+        if (pendingWithdrawal.fulfilled) revert WithdrawalAlreadyFulfilled();
+        if (pendingWithdrawal.user != msg.sender && msg.sender != owner()) {
+            revert UnauthorizedFulfillment();
+        }
+
+        uint256 sharesAmount = pendingWithdrawal.sharesAmount;
+        address user = pendingWithdrawal.user;
+
+        // Mark as fulfilled to prevent re-entrancy
+        pendingWithdrawal.fulfilled = true;
+
+        emit WithdrawalCancelled(user, withdrawalId, sharesAmount);
+
+        // Clean up: delete the withdrawal to save storage
+        delete pendingWithdrawals[withdrawalId];
+    }
+
+    /**
+     * @notice Calculate expected USDC value for a given amount of shares
+     * @dev Uses NAV (Net Asset Value) calculation with oracle prices
+     * @param sharesAmount Amount of shares to withdraw (in sector token decimals)
+     * @return usdcValue Expected USDC value (in quote token decimals)
+     */
+    function calculateWithdrawalValue(uint256 sharesAmount) public view returns (uint256 usdcValue) {
+        uint256 totalShares = SECTOR_TOKEN.totalSupply();
+        if (totalShares == 0) return 0;
+
+        // Get total NAV in oracle decimals
+        uint256 totalValue = getTotalValue();
+
+        // Calculate proportional value: (sharesAmount / totalShares) * totalValue
+        // Result is in oracle decimals
+        uint256 valueInOracleDecimals = (sharesAmount * totalValue) / totalShares;
+
+        // Convert from oracle decimals to quote token decimals
+        uint8 quoteDecimals = IERC20Metadata(address(QUOTE_TOKEN)).decimals();
+        uint8 oracleDecimals = oracle.decimals();
+
+        if (quoteDecimals >= oracleDecimals) {
+            // Scale up
+            return valueInOracleDecimals * (10 ** (quoteDecimals - oracleDecimals));
+        } else {
+            // Scale down
+            return valueInOracleDecimals / (10 ** (oracleDecimals - quoteDecimals));
+        }
     }
 
     /**
