@@ -1,0 +1,69 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: sticky;
+  top: calc(var(--navbar-height) + 20px);
+}
+
+.tradeSection {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--card-border);
+  background: var(--background);
+}
+
+.tab {
+  padding: 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.tab:hover {
+  color: var(--foreground);
+  background: var(--input-bg);
+}
+
+.tab.active {
+  color: var(--foreground);
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.tabContent {
+  padding: 0;
+}
+
+/* Override card styles for embedded cards */
+.tabContent :global(.card) {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+@media (max-width: 1024px) {
+  .container {
+    position: static;
+  }
+}

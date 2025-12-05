@@ -1,52 +1,11 @@
 .container {
   display: flex;
   flex-direction: column;
-  align-items: center;
   width: 100%;
-}
-
-.sectorHeader {
-  display: flex;
-  align-items: flex-start;
   gap: 20px;
-  margin-bottom: 40px;
-  width: 100%;
 }
 
-.sectorIcon {
-  font-size: 56px;
-  line-height: 1;
-}
-
-.title {
-  font-size: 36px;
-  font-weight: 700;
-  margin: 0 0 12px 0;
-  color: var(--foreground);
-}
-
-.subtitle {
-  font-size: 16px;
-  color: var(--text-secondary);
-  margin: 0;
-  max-width: 700px;
-  line-height: 1.6;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-  gap: 32px;
-  width: 100%;
-  margin-top: 40px;
-}
-
-.vaultInfoWrapper {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
+/* Coming Soon State */
 .comingSoon {
   display: flex;
   flex-direction: column;
@@ -92,27 +51,131 @@
   letter-spacing: 0.5px;
 }
 
-@media (max-width: 768px) {
-  .grid {
+/* Header - Compact */
+.header {
+  margin-bottom: 4px;
+}
+
+.headerTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.icon {
+  font-size: 40px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--foreground);
+}
+
+.description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Stats Grid */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+/* Two Column Layout */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 24px;
+  align-items: start;
+}
+
+.mainContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sidebar {
+  /* Sticky handled in TradePanel.module.css */
+}
+
+/* About Section */
+.aboutSection {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--foreground);
+}
+
+.sectionText {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .layout {
     grid-template-columns: 1fr;
   }
 
-  .title {
-    font-size: 28px;
+  .sidebar {
+    order: -1; /* Move trade panel to top on tablet/mobile */
   }
 
-  .subtitle {
-    font-size: 14px;
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
   }
+}
 
-  .sectorHeader {
+@media (max-width: 768px) {
+  .headerTitle {
     flex-direction: column;
     align-items: center;
     text-align: center;
+    gap: 12px;
   }
 
-  .sectorIcon {
+  .icon {
     font-size: 48px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .description {
+    font-size: 13px;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .aboutSection {
+    padding: 20px;
+  }
+
+  .comingSoon {
+    padding: 60px 20px;
   }
 
   .comingSoonIcon {
