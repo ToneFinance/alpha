@@ -1,11 +1,18 @@
 "use client";
 
 import { useWalletClient, useReadContract } from "wagmi";
-import { CONTRACTS, sectorTokenConfig } from "../lib/contracts";
+import { ABIS } from "../lib/contracts";
+import { SECTORS } from "../lib/sectors";
 import styles from "./AddTokenButton.module.css";
 
-export function AddTokenButton() {
+export function AddTokenButton({ id }: { id: string }) {
   const { data: walletClient } = useWalletClient();
+  const sector = SECTORS[id];
+
+   const sectorTokenConfig = {
+      address: sector.tokenAddress,
+      abi: ABIS.SectorToken,
+    } as const;
 
   // Fetch token symbol from chain
   const { data: symbol } = useReadContract({
@@ -26,7 +33,7 @@ export function AddTokenButton() {
       await walletClient.watchAsset({
         type: "ERC20",
         options: {
-          address: CONTRACTS.SECTOR_TOKEN,
+          address: sector.tokenAddress,
           symbol: symbol as string,
           decimals: decimals as number,
           // You can add an image URL here if you have a token logo

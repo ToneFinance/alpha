@@ -2,6 +2,7 @@ import { useAccount, useReadContract, useWriteContract, useWaitForTransactionRec
 import { parseUnits, formatUnits } from "viem";
 import { ABIS } from "../contracts";
 import { SectorConfig } from "../sectors";
+import { useCallback } from "react";
 
 /**
  * Hook to read vault data and user balances for a specific sector
@@ -69,11 +70,11 @@ export function useSectorVault(sector: SectorConfig) {
     functionName: "getTotalValue",
   });
 
-  const refetchAll = () => {
+  const refetchAll = useCallback(() => {
     refetchQuoteTokenBalance();
     refetchSectorTokenBalance();
     refetchAllowance();
-  };
+  }, [refetchQuoteTokenBalance, refetchSectorTokenBalance, refetchAllowance]);
 
   return {
     // User balances

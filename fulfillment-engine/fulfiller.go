@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -26,6 +25,7 @@ const (
 type Fulfiller struct {
 	client            *ethclient.Client
 	config            *Config
+	vaultConfig       VaultConfig // Specific vault this fulfiller manages
 	privateKey        *ecdsa.PrivateKey
 	fromAddress       common.Address
 	nonce             *uint64                  // Track nonce manually
@@ -41,28 +41,16 @@ type Fulfiller struct {
 	tokenDecimals     map[common.Address]uint8 // Underlying token decimals
 }
 
-func NewFulfiller(config *Config) (*Fulfiller, error) {
+func NewFulfiller(config *Config, vaultConfig VaultConfig, privateKey *ecdsa.PrivateKey, fromAddress common.Address) (*Fulfiller, error) {
 	client, err := ethclient.Dial(config.RPCURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to ethereum client: %v", err)
 	}
 
-	privateKey, err := crypto.HexToECDSA(config.PrivateKey[2:]) // Remove 0x prefix
-	if err != nil {
-		return nil, fmt.Errorf("invalid private key: %v", err)
-	}
-
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
-	}
-
-	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-
 	fulfiller := &Fulfiller{
 		client:         client,
 		config:         config,
+		vaultConfig:    vaultConfig,
 		privateKey:     privateKey,
 		fromAddress:    fromAddress,
 		nonce:          nil, // Will be fetched on first transaction
@@ -114,14 +102,14 @@ func NewFulfiller(config *Config) (*Fulfiller, error) {
 		fulfiller.tokenDecimals[token] = decimals
 	}
 
-	Logger.Info("Fulfillment engine initialized",
+	Logger.Info("Fulfiller initialized for vault",
+		"vault_name", vaultConfig.Name,
+		"vault_address", vaultConfig.Address.Hex(),
 		"fulfiller_address", fromAddress.Hex(),
-		"vault_address", config.SectorVault.Hex(),
 		"oracle_address", oracleAddr.Hex(),
 		"oracle_decimals", oracleDecimals,
 		"quote_token", quoteTokenAddr.Hex(),
 		"quote_decimals", quoteDecimals,
-		"rpc_url", config.RPCURL,
 		"underlying_tokens", len(fulfiller.underlyingTokens),
 	)
 
@@ -265,63 +253,130 @@ func (f *Fulfiller) FulfillWithdrawal(ctx context.Context, withdrawalId *big.Int
 	}
 
 	Logger.Info("Starting withdrawal fulfillment",
+		"vault_name", f.vaultConfig.Name,
 		"withdrawal_id", withdrawalId.String(),
 		"shares_amount", sharesAmount.String(),
 	)
 
-	// Get vault balances to determine proportional withdrawal amounts
-	vaultBalances, err := f.getVaultBalances(ctx)
+	// Get expected USDC value from vault contract
+	expectedUSDC, err := f.calculateWithdrawalValue(ctx, sharesAmount)
 	if err != nil {
-		Logger.Error("Failed to get vault balances",
+		Logger.Error("Failed to calculate withdrawal value",
+			"vault_name", f.vaultConfig.Name,
 			"withdrawal_id", withdrawalId.String(),
 			"error", err,
 		)
-		return fmt.Errorf("failed to get vault balances: %v", err)
+		return fmt.Errorf("failed to calculate withdrawal value: %v", err)
 	}
 
-	// Get total supply to calculate proportions
-	totalSupply, err := f.getSectorTokenTotalSupply(ctx)
+	Logger.Info("Calculated expected USDC for withdrawal",
+		"vault_name", f.vaultConfig.Name,
+		"withdrawal_id", withdrawalId.String(),
+		"expected_usdc", expectedUSDC.String(),
+	)
+
+	// Check if fulfiller has enough USDC balance
+	usdcBalance, err := f.getTokenBalance(ctx, f.quoteTokenAddress, f.fromAddress)
 	if err != nil {
-		Logger.Error("Failed to get sector token total supply",
+		Logger.Error("Failed to get USDC balance",
+			"vault_name", f.vaultConfig.Name,
 			"withdrawal_id", withdrawalId.String(),
 			"error", err,
 		)
-		return fmt.Errorf("failed to get total supply: %v", err)
+		return fmt.Errorf("failed to get USDC balance: %v", err)
 	}
 
-	// Calculate proportional underlying amounts
-	// Formula: (vaultBalance * sharesAmount) / totalSupply
-	underlyingAmounts := make([]*big.Int, len(f.underlyingTokens))
-	for i := range f.underlyingTokens {
-		amount := new(big.Int).Div(
-			new(big.Int).Mul(vaultBalances[i], sharesAmount),
-			totalSupply,
-		)
-		underlyingAmounts[i] = amount
-
-		Logger.Debug("Calculated underlying token amount for withdrawal",
+	if usdcBalance.Cmp(expectedUSDC) < 0 {
+		Logger.Error("Insufficient USDC balance for withdrawal",
+			"vault_name", f.vaultConfig.Name,
 			"withdrawal_id", withdrawalId.String(),
-			"token_index", i,
-			"token", f.underlyingTokens[i].Hex(),
-			"vault_balance", vaultBalances[i].String(),
-			"shares_amount", sharesAmount.String(),
-			"total_supply", totalSupply.String(),
-			"amount", amount.String(),
+			"required", expectedUSDC.String(),
+			"available", usdcBalance.String(),
 		)
+		return fmt.Errorf("insufficient USDC: have %s, need %s", usdcBalance.String(), expectedUSDC.String())
 	}
 
 	// Ensure USDC has max approval to vault
 	if err := f.ensureTokenApproval(ctx, f.quoteTokenAddress); err != nil {
 		Logger.Error("Failed to ensure USDC approval",
+			"vault_name", f.vaultConfig.Name,
 			"withdrawal_id", withdrawalId.String(),
 			"error", err,
 		)
 		return fmt.Errorf("failed to ensure USDC approval: %v", err)
 	}
 
+	// Calculate underlying amounts to send back based on vault composition
+	// We need to send proportional amounts of each underlying token
+	underlyingAmounts := make([]*big.Int, len(f.underlyingTokens))
+
+	// Fetch token prices from oracle
+	tokenPrices := make([]*big.Int, len(f.underlyingTokens))
+	for i, token := range f.underlyingTokens {
+		price, err := f.getTokenPrice(ctx, token)
+		if err != nil {
+			Logger.Error("Failed to get token price for withdrawal",
+				"withdrawal_id", withdrawalId.String(),
+				"token_index", i,
+				"token", token.Hex(),
+				"error", err,
+			)
+			return fmt.Errorf("failed to get price for token %s: %v", token.Hex(), err)
+		}
+		tokenPrices[i] = price
+	}
+
+	// Calculate total weight
+	totalWeight := big.NewInt(0)
+	for _, weight := range f.underlyingWeights {
+		totalWeight = new(big.Int).Add(totalWeight, weight)
+	}
+
+	// For each underlying token, calculate the amount based on weight and prices
+	for i, weight := range f.underlyingWeights {
+		token := f.underlyingTokens[i]
+		tokenDec := f.tokenDecimals[token]
+
+		// Step 1: Calculate value allocation (in quote token decimals)
+		valueAllocation := new(big.Int).Div(new(big.Int).Mul(expectedUSDC, weight), totalWeight)
+
+		// Step 2: Convert value allocation from quote decimals to oracle decimals
+		var normalizedValue *big.Int
+		if f.quoteDecimals >= f.oracleDecimals {
+			divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(f.quoteDecimals-f.oracleDecimals)), nil)
+			normalizedValue = new(big.Int).Div(valueAllocation, divisor)
+		} else {
+			multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(f.oracleDecimals-f.quoteDecimals)), nil)
+			normalizedValue = new(big.Int).Mul(valueAllocation, multiplier)
+		}
+
+		// Step 3: Calculate token amount: (normalizedValue * 10^tokenDecimals) / price
+		tokenDecMultiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(tokenDec)), nil)
+		amount := new(big.Int).Div(new(big.Int).Mul(normalizedValue, tokenDecMultiplier), tokenPrices[i])
+		underlyingAmounts[i] = amount
+
+		Logger.Debug("Calculated underlying token amount for withdrawal",
+			"withdrawal_id", withdrawalId.String(),
+			"token_index", i,
+			"token", token.Hex(),
+			"token_decimals", tokenDec,
+			"weight", weight.String(),
+			"price", tokenPrices[i].String(),
+			"value_allocation", valueAllocation.String(),
+			"amount", amount.String(),
+		)
+	}
+
+	Logger.Info("Fulfilling withdrawal with USDC",
+		"vault_name", f.vaultConfig.Name,
+		"withdrawal_id", withdrawalId.String(),
+		"usdc_amount", expectedUSDC.String(),
+	)
+
 	// Call fulfillWithdrawal on the vault
 	if err := f.callFulfillWithdrawal(ctx, withdrawalId, underlyingAmounts); err != nil {
 		Logger.Error("Failed to fulfill withdrawal",
+			"vault_name", f.vaultConfig.Name,
 			"withdrawal_id", withdrawalId.String(),
 			"error", err,
 		)
@@ -329,23 +384,28 @@ func (f *Fulfiller) FulfillWithdrawal(ctx context.Context, withdrawalId *big.Int
 	}
 
 	Logger.Info("Withdrawal fulfilled successfully",
+		"vault_name", f.vaultConfig.Name,
 		"withdrawal_id", withdrawalId.String(),
 		"shares_amount", sharesAmount.String(),
+		"usdc_transferred", expectedUSDC.String(),
 	)
 	return nil
 }
 
 func (f *Fulfiller) callFulfillWithdrawal(ctx context.Context, withdrawalId *big.Int, amounts []*big.Int) error {
-	parsedABI, _ := ParseSectorVaultABI()
+	parsedABI, err := ParseSectorVaultABI()
+	if err != nil {
+		return fmt.Errorf("parse sector vault abi: %w", err)
+	}
 
 	data, err := parsedABI.Pack("fulfillWithdrawal", withdrawalId, amounts)
 	if err != nil {
-		return err
+		return fmt.Errorf("pack call: %w", err)
 	}
 
-	tx, err := f.sendTransaction(ctx, f.config.SectorVault, big.NewInt(0), data)
+	tx, err := f.sendTransaction(ctx, f.vaultConfig.Address, big.NewInt(0), data)
 	if err != nil {
-		return err
+		return fmt.Errorf("send: %w", err)
 	}
 
 	Logger.Info("Fulfill withdrawal transaction sent",
@@ -368,6 +428,62 @@ func (f *Fulfiller) callFulfillWithdrawal(ctx context.Context, withdrawalId *big
 		"tx_hash", tx.Hash().Hex(),
 	)
 	return nil
+}
+
+// calculateWithdrawalValue calls the vault's calculateWithdrawalValue function
+func (f *Fulfiller) calculateWithdrawalValue(ctx context.Context, sharesAmount *big.Int) (*big.Int, error) {
+	parsedABI, err := ParseSectorVaultABI()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ABI: %v", err)
+	}
+
+	data, err := parsedABI.Pack("calculateWithdrawalValue", sharesAmount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack data: %v", err)
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &f.vaultConfig.Address,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call contract: %v", err)
+	}
+
+	var expectedUSDC *big.Int
+	if err := parsedABI.UnpackIntoInterface(&expectedUSDC, "calculateWithdrawalValue", result); err != nil {
+		return nil, fmt.Errorf("failed to unpack result: %v", err)
+	}
+
+	return expectedUSDC, nil
+}
+
+// getTokenBalance gets the balance of a token for a given address
+func (f *Fulfiller) getTokenBalance(ctx context.Context, token common.Address, owner common.Address) (*big.Int, error) {
+	parsedABI, err := ParseERC20ABI()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ERC20 ABI: %v", err)
+	}
+
+	data, err := parsedABI.Pack("balanceOf", owner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack data: %v", err)
+	}
+
+	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
+		To:   &token,
+		Data: data,
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call contract: %v", err)
+	}
+
+	var balance *big.Int
+	if err := parsedABI.UnpackIntoInterface(&balance, "balanceOf", result); err != nil {
+		return nil, fmt.Errorf("failed to unpack result: %v", err)
+	}
+
+	return balance, nil
 }
 
 // ensureTokenApproval ensures a token has max approval, only approving once per token
@@ -415,7 +531,7 @@ func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Addres
 	maxUint256.SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
 
 	parsedABI, _ := ParseERC20ABI()
-	data, err := parsedABI.Pack("approve", f.config.SectorVault, maxUint256)
+	data, err := parsedABI.Pack("approve", f.vaultConfig.Address, maxUint256)
 	if err != nil {
 		return err
 	}
@@ -459,7 +575,7 @@ func (f *Fulfiller) getAllowance(ctx context.Context, token common.Address) (*bi
 		return nil, err
 	}
 
-	data, err := parsedABI.Pack("allowance", f.fromAddress, f.config.SectorVault)
+	data, err := parsedABI.Pack("allowance", f.fromAddress, f.vaultConfig.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +605,7 @@ func (f *Fulfiller) callFulfillDeposit(ctx context.Context, depositId *big.Int, 
 		return err
 	}
 
-	tx, err := f.sendTransaction(ctx, f.config.SectorVault, big.NewInt(0), data)
+	tx, err := f.sendTransaction(ctx, f.vaultConfig.Address, big.NewInt(0), data)
 	if err != nil {
 		return err
 	}
@@ -631,7 +747,7 @@ func (f *Fulfiller) GetNextDepositId(ctx context.Context) (*big.Int, error) {
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {
@@ -656,7 +772,7 @@ func (f *Fulfiller) GetPendingDeposit(ctx context.Context, depositId *big.Int) (
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {
@@ -705,7 +821,7 @@ func (f *Fulfiller) loadUnderlyingTokens(ctx context.Context) error {
 		}
 
 		tokenResult, err := f.client.CallContract(ctx, ethereum.CallMsg{
-			To:   &f.config.SectorVault,
+			To:   &f.vaultConfig.Address,
 			Data: tokenData,
 		}, nil)
 		if err != nil {
@@ -733,7 +849,7 @@ func (f *Fulfiller) loadUnderlyingTokens(ctx context.Context) error {
 		}
 
 		weightResult, err := f.client.CallContract(ctx, ethereum.CallMsg{
-			To:   &f.config.SectorVault,
+			To:   &f.vaultConfig.Address,
 			Data: weightData,
 		}, nil)
 		if err != nil {
@@ -783,7 +899,7 @@ func (f *Fulfiller) getOracleAddress(ctx context.Context) (common.Address, error
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {
@@ -870,7 +986,7 @@ func (f *Fulfiller) getQuoteTokenAddress(ctx context.Context) (common.Address, e
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {
@@ -928,7 +1044,7 @@ func (f *Fulfiller) getVaultBalances(ctx context.Context) ([]*big.Int, error) {
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {
@@ -962,7 +1078,7 @@ func (f *Fulfiller) getSectorTokenTotalSupply(ctx context.Context) (*big.Int, er
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {
@@ -1012,7 +1128,7 @@ func (f *Fulfiller) GetNextWithdrawalId(ctx context.Context) (*big.Int, error) {
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {
@@ -1037,7 +1153,7 @@ func (f *Fulfiller) GetPendingWithdrawal(ctx context.Context, withdrawalId *big.
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
-		To:   &f.config.SectorVault,
+		To:   &f.vaultConfig.Address,
 		Data: data,
 	}, nil)
 	if err != nil {

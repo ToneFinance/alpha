@@ -1,117 +1,878 @@
-
-╭-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------╮
-| Type        | Signature                                                                         | Selector                                                           |
-+======================================================================================================================================================================+
-| event       | BasketUpdated(address[],uint256[])                                                | 0xbfd880dff0c2337c52aed21b5d8e6792fe43d28f6767668c4c8c9fd72add4cfc |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | DepositCancelled(address,uint256,uint256)                                         | 0xea6a5867aa6fded974ad8936ccc2cc7e154e2b0a31226d7a62c683af0fbae580 |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | DepositFulfilled(address,uint256,uint256,uint256)                                 | 0x73e3270116e683df4a28817ae80a4a4d67f89f564a33c78f8059de568874c10a |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | DepositRequested(address,uint256,uint256,uint256)                                 | 0x827893a5f98dbfaba92dbe0bb2cafe8b9fd5573711d9768ce5cd4e2af44601ac |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | FulfillmentRoleUpdated(address,address)                                           | 0xc2d82f40466a190264f05439b0eee7d3a9edb325b0b763bb6e579f0281445ea0 |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | OracleUpdated(address,address)                                                    | 0x078c3b417dadf69374a59793b829c52001247130433427049317bde56607b1b7 |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | OwnershipTransferred(address,address)                                             | 0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0 |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | Withdrawal(address,uint256,address[],uint256[])                                   | 0xa9e30bf144f83390a4fe47562a4e16892108102221c674ff538da0b72a83d174 |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | WithdrawalCancelled(address,uint256,uint256)                                      | 0x609802616efe88a6b73a266ced98c5dfd07c25e64549e620527605107ea30e81 |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | WithdrawalFulfilled(address,uint256,uint256,uint256)                              | 0x567289124f980c60ab6be9d631895db98cf8d567e8ef80f55d8be6474ad2d0a6 |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | WithdrawalRequested(address,uint256,uint256,uint256)                              | 0x38e3d972947cfef94205163d483d6287ef27eb312e20cb8e0b13a49989db232e |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | DepositAlreadyFulfilled()                                                         | 0x1b136079                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | DepositNotFound()                                                                 | 0x411321ed                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | EmptyBasket()                                                                     | 0x38f6c555                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | FulfillmentUSDCMismatch()                                                         | 0xb1077c11                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | FulfillmentValueMismatch()                                                        | 0x112e83fa                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | InsufficientShares()                                                              | 0x39996567                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | InvalidAddress()                                                                  | 0xe6c4247b                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | InvalidAmount()                                                                   | 0x2c5211c6                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | InvalidWeights()                                                                  | 0x84677ce8                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | OwnableInvalidOwner(address)                                                      | 0x1e4fbdf7                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | OwnableUnauthorizedAccount(address)                                               | 0x118cdaa7                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ReentrancyGuardReentrantCall()                                                    | 0x3ee5aeb5                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | SafeERC20FailedOperation(address)                                                 | 0x5274afe7                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | UnauthorizedFulfillment()                                                         | 0x1ada2ea6                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | WithdrawalAlreadyFulfilled()                                                      | 0x84b092a2                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | WithdrawalNotFound()                                                              | 0x8d0fc1dd                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | QUOTE_TOKEN() view returns (IERC20)                                               | 0x78892cea                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | SECTOR_TOKEN() view returns (SectorToken)                                         | 0x67b04b59                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | calculateShares(uint256) view returns (uint256)                                   | 0x3ec16194                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | calculateWithdrawalValue(uint256) view returns (uint256)                          | 0x43dc2f86                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | cancelDeposit(uint256) nonpayable                                                 | 0x72fada5c                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | cancelWithdrawal(uint256) nonpayable                                              | 0x3efcfda4                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | deposit(uint256) nonpayable returns (uint256)                                     | 0xb6b55f25                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | fulfillDeposit(uint256,uint256[]) nonpayable                                      | 0x34d7dca3                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | fulfillWithdrawal(uint256,uint256[]) nonpayable                                   | 0xd4d6808d                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | fulfillmentRole() view returns (address)                                          | 0x69bcac34                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | getTotalValue() view returns (uint256)                                            | 0xcaa648b4                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | getUnderlyingTokens() view returns (address[])                                    | 0xd95bd6c9                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | getVaultBalances() view returns (address[],uint256[])                             | 0x22370685                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | nextDepositId() view returns (uint256)                                            | 0x8070a4bd                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | nextWithdrawalId() view returns (uint256)                                         | 0x4a9122e3                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | oracle() view returns (IPriceOracle)                                              | 0x7dc0d1d0                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | owner() view returns (address)                                                    | 0x8da5cb5b                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | pendingDeposits(uint256) view returns (address,uint256,bool,uint256)              | 0xa7932794                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | pendingWithdrawals(uint256) view returns (address,uint256,bool,uint256)           | 0xe6150400                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | renounceOwnership() nonpayable                                                    | 0x715018a6                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | requestWithdrawal(uint256) nonpayable returns (uint256)                           | 0x9ee679e8                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | setFulfillmentRole(address) nonpayable                                            | 0x2d452717                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | setOracle(address) nonpayable                                                     | 0x7adbf973                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | targetWeights(address) view returns (uint256)                                     | 0xbc97c95e                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | transferOwnership(address) nonpayable                                             | 0xf2fde38b                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | underlyingTokens(uint256) view returns (address)                                  | 0xa3bf224b                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | updateBasket(address[],uint256[]) nonpayable                                      | 0x5806e733                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | withdraw(uint256) nonpayable                                                      | 0x2e1a7d4d                                                         |
-|-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------|
-| constructor | constructor(address,string,string,address[],uint256[],address,address) nonpayable |                                                                    |
-╰-------------+-----------------------------------------------------------------------------------+--------------------------------------------------------------------╯
-
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_quoteToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_sectorName",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_sectorSymbol",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_underlyingTokens",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "_targetWeights",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "_fulfillmentRole",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_oracle",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "QUOTE_TOKEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SECTOR_TOKEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract SectorToken"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "calculateShares",
+    "inputs": [
+      {
+        "name": "quoteAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "shares",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "calculateWithdrawalValue",
+    "inputs": [
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "usdcValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelDeposit",
+    "inputs": [
+      {
+        "name": "depositId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelWithdrawal",
+    "inputs": [
+      {
+        "name": "withdrawalId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "deposit",
+    "inputs": [
+      {
+        "name": "quoteAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "depositId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "fulfillDeposit",
+    "inputs": [
+      {
+        "name": "depositId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "underlyingAmounts",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "fulfillWithdrawal",
+    "inputs": [
+      {
+        "name": "withdrawalId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "underlyingAmounts",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "fulfillmentRole",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTotalValue",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "totalValue",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getUnderlyingTokens",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address[]",
+        "internalType": "address[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getVaultBalances",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "tokens",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "balances",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextDepositId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextWithdrawalId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "oracle",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPriceOracle"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingDeposits",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "quoteAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fulfilled",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingWithdrawals",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fulfilled",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "requestWithdrawal",
+    "inputs": [
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "withdrawalId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setFulfillmentRole",
+    "inputs": [
+      {
+        "name": "newRole",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setOracle",
+    "inputs": [
+      {
+        "name": "newOracle",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "targetWeights",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "underlyingTokens",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "updateBasket",
+    "inputs": [
+      {
+        "name": "_underlyingTokens",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "_targetWeights",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdraw",
+    "inputs": [
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "BasketUpdated",
+    "inputs": [
+      {
+        "name": "tokens",
+        "type": "address[]",
+        "indexed": false,
+        "internalType": "address[]"
+      },
+      {
+        "name": "weights",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DepositCancelled",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "depositId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "quoteAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DepositFulfilled",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "depositId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DepositRequested",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "depositId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "quoteAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FulfillmentRoleUpdated",
+    "inputs": [
+      {
+        "name": "oldRole",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newRole",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OracleUpdated",
+    "inputs": [
+      {
+        "name": "oldOracle",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOracle",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Withdrawal",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "tokens",
+        "type": "address[]",
+        "indexed": false,
+        "internalType": "address[]"
+      },
+      {
+        "name": "amounts",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WithdrawalCancelled",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "withdrawalId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WithdrawalFulfilled",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "withdrawalId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "usdcAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WithdrawalRequested",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "withdrawalId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "sharesAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "DepositAlreadyFulfilled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DepositNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EmptyBasket",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FulfillmentUSDCMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FulfillmentValueMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientShares",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidWeights",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeERC20FailedOperation",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedFulfillment",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WithdrawalAlreadyFulfilled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WithdrawalNotFound",
+    "inputs": []
+  }
+]

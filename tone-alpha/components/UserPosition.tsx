@@ -4,6 +4,7 @@ import { useAccount } from "wagmi";
 import { SectorConfig } from "@/lib/sectors";
 import { useSectorVault, useTokenMetadata, formatTokenAmountTo2Decimals } from "@/lib/hooks/useMultiSectorVault";
 import styles from "./UserPosition.module.css";
+import { AddTokenButton } from "./AddTokenButton";
 
 interface UserPositionProps {
   sector: SectorConfig;
@@ -73,6 +74,10 @@ export function UserPosition({ sector }: UserPositionProps) {
         <p className={styles.emptyMessage}>
           You don&apos;t have any {sectorSymbol} yet. Deposit {quoteSymbol} to get started.
         </p>
+      )}
+
+      {userBalance > 0n && (
+        <AddTokenButton id={sector.id} />
       )}
     </div>
   );

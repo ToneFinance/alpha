@@ -20,18 +20,20 @@ const (
 )
 
 type EventListener struct {
-	client    *ethclient.Client
-	config    *Config
-	fulfiller *Fulfiller
-	lastBlock uint64
+	client      *ethclient.Client
+	config      *Config
+	vaultConfig VaultConfig
+	fulfiller   *Fulfiller
+	lastBlock   uint64
 }
 
-func NewEventListener(client *ethclient.Client, config *Config, fulfiller *Fulfiller) *EventListener {
+func NewEventListener(client *ethclient.Client, config *Config, vaultConfig VaultConfig, fulfiller *Fulfiller) *EventListener {
 	return &EventListener{
-		client:    client,
-		config:    config,
-		fulfiller: fulfiller,
-		lastBlock: 0,
+		client:      client,
+		config:      config,
+		vaultConfig: vaultConfig,
+		fulfiller:   fulfiller,
+		lastBlock:   0,
 	}
 }
 
@@ -59,9 +61,10 @@ func (l *EventListener) Start(ctx context.Context) error {
 	l.lastBlock = currentBlock
 
 	Logger.Info("Event listener started",
+		"vault_name", l.vaultConfig.Name,
+		"vault_address", l.vaultConfig.Address.Hex(),
 		"start_block", l.lastBlock,
 		"poll_interval_seconds", l.config.PollInterval,
-		"vault_address", l.config.SectorVault.Hex(),
 	)
 
 	ticker := time.NewTicker(time.Duration(l.config.PollInterval) * time.Second)
@@ -101,7 +104,7 @@ func (l *EventListener) poll(ctx context.Context) error {
 	query := ethereum.FilterQuery{
 		FromBlock: new(big.Int).SetUint64(l.lastBlock + 1),
 		ToBlock:   new(big.Int).SetUint64(currentBlock),
-		Addresses: []common.Address{l.config.SectorVault},
+		Addresses: []common.Address{l.vaultConfig.Address},
 		Topics:    [][]common.Hash{{common.HexToHash(depositRequestedSignature), common.HexToHash(withdrawalRequestedSignature)}},
 	}
 

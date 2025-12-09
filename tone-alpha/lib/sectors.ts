@@ -17,40 +17,28 @@ export interface SectorConfig {
 
 // All configured sectors
 export const SECTORS: Record<string, SectorConfig> = {
-  defi: {
-    id: "defi",
-    name: "DeFi Sector",
-    description: "Diversified basket of leading DeFi protocols including lending, DEXs, and derivatives platforms",
-    vaultAddress: "0x70E6a36bb71549C78Cd9c9f660B0f67B13B3f772",
-    tokenAddress: "0xD3faFD3196ffE8830B3992AEED222c3Ce33B174A",
+  ai: {
+    id: "ai",
+    name: "AI Sector",
+    description: "Diversified basket of leading AI and machine learning tokens including compute, data, and AI agent protocols",
+    vaultAddress: "0x2eC9856556c6E7cF626542fc620822136d698320",
+    tokenAddress: "0xef303C9eD9eD15606dF2c40a4fFb67907F5631BE",
     quoteTokenAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
     color: "#667eea",
-    icon: "🏦",
+    icon: "🤖",
     isActive: true,
   },
-  // Example: Additional sectors can be added here
-  // infrastructure: {
-  //   id: "infrastructure",
-  //   name: "Infrastructure Sector",
-  //   description: "Layer-1/Layer-2 blockchains and infrastructure protocols",
-  //   vaultAddress: "0x...",
-  //   tokenAddress: "0x...",
-  //   quoteTokenAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  //   color: "#764ba2",
-  //   icon: "⚡",
-  //   isActive: false, // Coming soon
-  // },
-  // gaming: {
-  //   id: "gaming",
-  //   name: "Gaming & Metaverse",
-  //   description: "Gaming tokens, NFT platforms, and metaverse projects",
-  //   vaultAddress: "0x...",
-  //   tokenAddress: "0x...",
-  //   quoteTokenAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  //   color: "#f093fb",
-  //   icon: "🎮",
-  //   isActive: false,
-  // },
+  usa: {
+    id: "usa",
+    name: "Made in America",
+    description: "Made in America sector featuring top US-based and US-friendly crypto projects",
+    vaultAddress: "0x368167Fc17EC24906233104c21f3919A8cE43D99",
+    tokenAddress: "0x9BF24297bF3bD256a7EA6e840EF6f9B2fA108b88",
+    quoteTokenAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
+    color: "#f093fb",
+    icon: "🇺🇸",
+    isActive: true,
+  },
 } as const;
 
 /**
@@ -91,6 +79,13 @@ export function getSectorContracts(sectorId: string) {
 }
 
 /**
- * Default sector (used for backward compatibility)
+ * Get the first active sector (useful for initial UI state)
+ * Note: For multi-sector UIs, components should allow sector selection
  */
-export const DEFAULT_SECTOR = SECTORS.defi;
+export function getFirstActiveSector(): SectorConfig {
+  const active = getActiveSectors();
+  if (active.length === 0) {
+    throw new Error("No active sectors found");
+  }
+  return active[0];
+}

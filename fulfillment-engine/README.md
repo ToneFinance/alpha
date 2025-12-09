@@ -1,17 +1,19 @@
 # TONE Finance - Fulfillment Engine
 
-A simple Go-based fulfillment engine for the TONE Finance sector vault. Listens for deposit events and automatically fulfills them by providing the underlying tokens.
+A Go-based fulfillment engine for TONE Finance sector vaults. Supports **multiple vaults** simultaneously, listening for deposit and withdrawal events and automatically fulfilling them.
 
 ## Features
 
-- ✅ Listens for `DepositRequested` events from the SectorVault contract
-- ✅ **Dynamically fetches** underlying tokens and weights from the vault
+- ✅ **Multi-vault support** - manage multiple sector vaults with a single engine instance
+- ✅ Listens for `DepositRequested` and `WithdrawalRequested` events from SectorVault contracts
+- ✅ **Dynamically fetches** underlying tokens and weights from each vault
 - ✅ Automatically calculates underlying token amounts based on basket weights
-- ✅ Approves and transfers underlying tokens to the vault
-- ✅ Calls `fulfillDeposit` on the vault contract
-- ✅ **Automatic pending deposit handling** - checks and fulfills any pending deposits on startup
+- ✅ Approves and transfers underlying tokens to the vault (for deposits)
+- ✅ Handles USDC transfers back to users (for withdrawals)
+- ✅ Calls `fulfillDeposit` and `fulfillWithdrawal` on the vault contracts
+- ✅ **Automatic pending request handling** - checks and fulfills any pending deposits/withdrawals on startup
 - ✅ Block-based polling (no websocket dependencies)
-- ✅ Graceful shutdown handling
+- ✅ Graceful shutdown handling with in-flight operation tracking
 
 ## Prerequisites
 
@@ -47,13 +49,43 @@ PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE
 # Base Sepolia RPC (default is fine)
 RPC_URL=https://sepolia.base.org
 
-# Sector Vault contract address
-# Underlying tokens and weights are fetched automatically from the vault
-SECTOR_VAULT=0xYOUR_VAULT_ADDRESS_HERE
+# Multi-vault configuration - Option 1: Named vaults (RECOMMENDED)
+SECTOR_VAULT_AI=0xYOUR_AI_VAULT_ADDRESS
+SECTOR_VAULT_MIA=0xYOUR_MIA_VAULT_ADDRESS
+
+# Alternative: Comma-separated list
+# SECTOR_VAULTS=0xVault1,0xVault2,0xVault3
+
+# Legacy: Single vault (for backward compatibility)
+# SECTOR_VAULT=0xYOUR_VAULT_ADDRESS_HERE
 
 # Polling interval in seconds (12 seconds = ~1 block on Base)
 POLL_INTERVAL=12
 ```
+
+**Multi-Vault Configuration:**
+
+The engine supports three ways to configure vaults:
+
+1. **Named vaults** (recommended for clarity):
+   ```env
+   SECTOR_VAULT_AI=0x...
+   SECTOR_VAULT_MIA=0x...
+   SECTOR_VAULT_DEFI=0x...
+   ```
+   Supported names: `AI`, `MIA`, `DEFI`, `GAMING`, `MEME`
+
+2. **Comma-separated list**:
+   ```env
+   SECTOR_VAULTS=0xVault1Address,0xVault2Address,0xVault3Address
+   ```
+
+3. **Single vault** (legacy):
+   ```env
+   SECTOR_VAULT=0xYourVaultAddress
+   ```
+
+The engine checks for named vaults first, then `SECTOR_VAULTS`, then falls back to `SECTOR_VAULT`.
 
 ### 3. Ensure Wallet is Funded
 
@@ -99,21 +131,34 @@ go build -o fulfillment-engine
 
 ### On Startup
 
-1. **Pending Deposit Check**:
-   - Queries the contract for total number of deposits (`nextDepositId`)
-   - Checks each deposit to see if it's fulfilled
-   - Automatically fulfills any pending deposits
+1. **Multi-Vault Initialization**:
+   - Loads all configured vaults from environment variables
+   - Creates a separate fulfiller and event listener for each vault
+   - Each vault runs independently in its own goroutine
 
-2. **Continuous Polling**:
-   - Every 12 seconds (configurable), queries for new `DepositRequested` events
-   - Extracts deposit ID and quote amount from events
+2. **Pending Request Check** (per vault):
+   - Queries each contract for total number of deposits (`nextDepositId`) and withdrawals (`nextWithdrawalId`)
+   - Checks each request to see if it's fulfilled
+   - Automatically fulfills any pending deposits or withdrawals
+
+3. **Continuous Polling** (per vault):
+   - Every 12 seconds (configurable), queries for new `DepositRequested` and `WithdrawalRequested` events
+   - Extracts request IDs and amounts from events
+   - Processes requests concurrently across all vaults
 
 ### For Each Deposit
 
-3. **Token Calculation**: Calculates underlying token amounts based on basket weights fetched from the vault
-4. **Approval**: Approves each underlying token for the vault to spend (once per token with max approval)
-5. **Fulfillment**: Calls `fulfillDeposit()` with the calculated amounts
-6. **Confirmation**: Waits for transaction confirmation and logs success
+4. **Token Calculation**: Calculates underlying token amounts based on basket weights fetched from the vault
+5. **Approval**: Approves each underlying token for the vault to spend (once per token with max approval)
+6. **Fulfillment**: Calls `fulfillDeposit()` with the calculated amounts
+7. **Confirmation**: Waits for transaction confirmation and logs success
+
+### For Each Withdrawal
+
+4. **Value Calculation**: Fetches the expected USDC value from the vault's oracle
+5. **USDC Approval**: Approves USDC for the vault to spend (if not already approved)
+6. **Fulfillment**: Calls `fulfillWithdrawal()` which transfers USDC to the user
+7. **Confirmation**: Waits for transaction confirmation and logs success
 
 ## Example Output
 
@@ -121,44 +166,46 @@ go build -o fulfillment-engine
 🚀 TONE Finance - Fulfillment Engine
 =====================================
 
-✅ Fulfillment engine initialized
-📍 Fulfiller address: 0x2667A044315Cea7A4FC42Ea7E851FC276ADc5B0F
-🏦 Vault address: 0x496c491D1E4fc8E563B212b143106732404D9CeE
+INFO TONE Finance - Fulfillment Engine starting vault_count=2
+INFO Fulfiller wallet initialized address=0x2667A044315Cea7A4FC42Ea7E851FC276ADc5B0F
 
-🔍 Checking for pending deposits...
-📊 Found 3 total deposit(s), checking status...
+INFO Initializing vault vault_name=AI vault_address=0x496c491D1E4fc8E563B212b143106732404D9CeE
+INFO Fulfiller initialized for vault vault_name=AI vault_address=0x496c491D1E4fc8E563B212b143106732404D9CeE underlying_tokens=10
 
-🔔 Found pending deposit #1
-   User: 0xabcd...
-   Quote Amount: 10000000
+INFO Initializing vault vault_name=MIA vault_address=0x7B3a8E12D4e5F6C8b9A1C2D3E4F5a6B7C8D9E0F1
+INFO Fulfiller initialized for vault vault_name=MIA vault_address=0x7B3a8E12D4e5F6C8b9A1C2D3E4F5a6B7C8D9E0F1 underlying_tokens=10
 
-🔄 Fulfilling deposit #1
-💵 Quote amount: 10000000
-📊 Underlying amounts calculated based on vault basket
-  ✓ Approved token 0x12CF3c...: 0x123...
-  ✓ Approved token 0x5C37E9...: 0x456...
-  ✓ Approved token 0x2243c9...: 0x789...
-  ✓ Fulfilled deposit: 0xabc...123
-✅ Deposit #1 fulfilled successfully!
+INFO Starting event listener vault_name=AI
+INFO Scanning for pending deposits on startup
+INFO Scanning for pending withdrawals on startup
+INFO Event listener started vault_name=AI start_block=32339825
 
-✓ Fulfilled 1 pending deposit(s)
+INFO Starting event listener vault_name=MIA
+INFO Scanning for pending deposits on startup
+INFO Found pending deposit deposit_id=0 user=0xabcd... quote_amount=10000000
+INFO Starting deposit fulfillment deposit_id=0 quote_amount=10000000
+INFO Deposit fulfilled successfully deposit_id=0 tx_hash=0x123...
+INFO Event listener started vault_name=MIA start_block=32339825
 
-🎯 Starting event listener from block 32339825
-⏰ Polling every 12 seconds
+INFO All event listeners started successfully
 
-🔍 Checking blocks 32339826 to 32339838
-⏳ No new blocks (current: 32339838)
+🔍 Both vaults polling every 12 seconds...
+⏳ Processing deposits and withdrawals concurrently
 ```
 
 ## Configuration
 
 ### Dynamic Basket Configuration
 
-The fulfillment engine **automatically fetches** the basket configuration from the vault on startup:
+The fulfillment engine **automatically fetches** the basket configuration from each vault on startup:
 - Underlying token addresses
 - Target weights for each token (in basis points, sum = 10000)
+- Oracle address and decimals
+- Quote token (USDC) address and decimals
 
-This means the engine adapts to any vault configuration without code changes. When you update the basket in the vault, simply restart the fulfillment engine to pick up the new configuration.
+This means the engine adapts to any vault configuration without code changes. When you update the basket in a vault, simply restart the fulfillment engine to pick up the new configuration.
+
+**Note:** Shared tokens (like BAT in both AI and MIA sectors) are handled efficiently - the engine will reuse approvals across vaults.
 
 ### Polling Interval
 

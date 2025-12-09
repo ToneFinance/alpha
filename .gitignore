@@ -15,3 +15,4 @@ docs/
 
 # Node modules
 node_modules/
+script/venv/

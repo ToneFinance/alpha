@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 func main() {
@@ -23,18 +27,69 @@ func main() {
 	Logger.Info("TONE Finance - Fulfillment Engine starting",
 		"log_level", config.LogLevel,
 		"log_format", config.LogFormat,
+		"vault_count", len(config.SectorVaults),
 	)
 
-	// Create fulfiller
-	fulfiller, err := NewFulfiller(config)
+	// Connect to Ethereum client (shared across all vaults)
+	client, err := ethclient.Dial(config.RPCURL)
 	if err != nil {
-		Logger.Error("Failed to create fulfiller", "error", err)
+		Logger.Error("Failed to connect to ethereum client", "error", err)
 		os.Exit(1)
 	}
-	defer fulfiller.Close()
+	defer client.Close()
 
-	// Create event listener
-	listener := NewEventListener(fulfiller.client, config, fulfiller)
+	// Parse private key (shared across all vaults)
+	privateKey, err := crypto.HexToECDSA(config.PrivateKey[2:]) // Remove 0x prefix
+	if err != nil {
+		Logger.Error("Invalid private key", "error", err)
+		os.Exit(1)
+	}
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		Logger.Error("Cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+		os.Exit(1)
+	}
+
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
+	Logger.Info("Fulfiller wallet initialized",
+		"address", fromAddress.Hex(),
+	)
+
+	// Create fulfillers and listeners for each vault
+	var fulfillers []*Fulfiller
+	var listeners []*EventListener
+
+	for _, vaultConfig := range config.SectorVaults {
+		Logger.Info("Initializing vault",
+			"vault_name", vaultConfig.Name,
+			"vault_address", vaultConfig.Address.Hex(),
+		)
+
+		// Create fulfiller for this vault
+		fulfiller, err := NewFulfiller(config, vaultConfig, privateKey, fromAddress)
+		if err != nil {
+			Logger.Error("Failed to create fulfiller",
+				"vault_name", vaultConfig.Name,
+				"error", err,
+			)
+			os.Exit(1)
+		}
+		fulfillers = append(fulfillers, fulfiller)
+
+		// Create event listener for this vault
+		listener := NewEventListener(client, config, vaultConfig, fulfiller)
+		listeners = append(listeners, listener)
+	}
+
+	// Ensure all fulfillers are closed on exit
+	defer func() {
+		for _, f := range fulfillers {
+			f.Close()
+		}
+	}()
 
 	// Start listening for events
 	ctx, cancel := context.WithCancel(context.Background())
@@ -45,16 +100,24 @@ func main() {
 
 	// Track listener completion
 	var wg sync.WaitGroup
-	wg.Add(1)
-	listenerErr := make(chan error, 1)
+	listenerErr := make(chan error, len(listeners))
 
-	// Start listener in goroutine
-	go func() {
-		defer wg.Done()
-		if err := listener.Start(ctx); err != nil && err != context.Canceled {
-			listenerErr <- err
-		}
-	}()
+	// Start all listeners in goroutines
+	for i, listener := range listeners {
+		wg.Add(1)
+		vaultName := config.SectorVaults[i].Name
+
+		go func(l *EventListener, name string) {
+			defer wg.Done()
+			Logger.Info("Starting event listener", "vault_name", name)
+			if err := l.Start(ctx); err != nil && err != context.Canceled {
+				Logger.Error("Listener error", "vault_name", name, "error", err)
+				listenerErr <- err
+			}
+		}(listener, vaultName)
+	}
+
+	Logger.Info("All event listeners started successfully")
 
 	// Wait for shutdown signal or listener error
 	select {
@@ -74,7 +137,9 @@ func main() {
 		shutdownComplete := make(chan struct{})
 		go func() {
 			Logger.Info("Waiting for in-flight fulfillments to complete")
-			fulfiller.Wait()
+			for _, f := range fulfillers {
+				f.Wait()
+			}
 			close(shutdownComplete)
 		}()
 
@@ -87,13 +152,15 @@ func main() {
 			)
 		}
 
-		// Wait for listener to stop
+		// Wait for all listeners to stop
 		wg.Wait()
 		Logger.Info("Fulfillment engine stopped gracefully")
 
 	case err := <-listenerErr:
 		cancel()
 		Logger.Error("Listener error, shutting down", "error", err)
+		// Wait for all listeners to stop before exiting
+		wg.Wait()
 		os.Exit(1)
 	}
 }

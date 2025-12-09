@@ -12,19 +12,39 @@ import {MockOracle} from "../src/MockOracle.sol";
  */
 contract UpdateOraclePrices is Script {
     // MockOracle address from deployment
-    address constant MOCK_ORACLE = 0xfe6e83c930F868a756d0480720bbfBf4D8CAa815;
+    address constant MOCK_ORACLE = 0x8E6596749b8aDa46195C04e03297469aFA2fd4F3;
 
-    // Token addresses from deployment
-    address constant ZRX = 0x4d277c1b483F4F049894c42FE3656815e9f8bf3d;        // 0X0
-    address constant ARKM = 0x2DA0d6807a008550592aAA22028378c5058347ec;
-    address constant FET = 0x8b0BE05AFF375244bb0e0e9A7CDD8c36c9E6dF4B;
-    address constant KAITO = 0x5c2c71305E088f517774dA4d81292e39bE8e4f7E;
-    address constant NEAR = 0x6337BfbB0F2671a68293650B6b8811728dC63785;
-    address constant NOS = 0x638880e9799401199C40847E773267C5Ee475Fb0;
-    address constant PAAL = 0xc2B88B7818766F9FfA76427B12b43c672C969A52;
-    address constant RENDER = 0xd1dA8e1D87271d5618B908c5cfc8142cA15300A4;
-    address constant TAO = 0x783AceD64b307e8D85849c8bb8B3A1a14DD2F7bE;
-    address constant VIRTUAL = 0xA12fF542E109cA5CFFd75740C8134cb720b78833;
+    // Token configuration
+    struct TokenConfig {
+        string name;
+        address addr;
+        uint256 price;
+        uint8 decimals;
+    }
+
+    TokenConfig[] public tokens;
+
+    constructor() {
+        tokens.push(TokenConfig("BAT", 0x02A8Db2231F88FEe863081Aa7BAA4b7e3795e84D, 259544000000000000, 18));
+        tokens.push(TokenConfig("BDX", 0xC8805760222BD0A26A9cD0517fEcd47f8A0f735f, 84793000000000000, 18));
+        tokens.push(TokenConfig("FIL", 0x4e248E77CCfF9766eC3d836a8219d5DD4B646D1d, 1470000000000000000, 18));
+        tokens.push(TokenConfig("GLM", 0xEc675EF3Bd4Db1cE1E01990984222636311854D0, 213199000000000000, 18));
+        tokens.push(TokenConfig("ICP", 0xB6eB2a1b73bC0D9402c59C1B092AbCec900b3d04, 3340000000000000000, 18));
+        tokens.push(TokenConfig("NEAR", 0x31d0d71D767CE6B4d92aF123476f6dB87A4f4249, 1720000000000000000, 18));
+        tokens.push(TokenConfig("NMR", 0x7ae619FB4025218ba58F0541CC6ebaaeFB604769, 11380000000000000000, 18));
+        tokens.push(TokenConfig("SIREN", 0x4221C19e2BeBD58a3bc7b8D38C76BDC72644Ff9f, 6628260000000000, 18));
+        tokens.push(TokenConfig("TRAC", 0x812CE10fB1B923C054c47c0CD93244B45850E6a8, 515818000000000000, 18));
+        tokens.push(TokenConfig("VANA", 0x2832BFd3B0141ef7f1452eA1975323153ac0a7c7, 2750000000000000000, 18));
+        tokens.push(TokenConfig("BCH", 0xbe1e8Ce9C2e3125Aa4155e360caB1dE1d6109239, 574630000000000000000, 18));
+        tokens.push(TokenConfig("COMP", 0x07c0080711B2E937F32846779eE6C5828b8ab24D, 31180000000000000000, 18));
+        tokens.push(TokenConfig("FRAX", 0x9baBf71CFF53A59Cbd5AafF768238A60c6Ac3F4B, 993675000000000000, 18));
+        tokens.push(TokenConfig("KAS", 0x0Fe6Ef67eff87378F49864e666039387ff8adE4E, 50324000000000000, 18));
+        tokens.push(TokenConfig("LTC", 0x0C4cEbA4DEf071a21650E54e598a6602157521cc, 83210000000000000000, 18));
+        tokens.push(TokenConfig("UNI", 0xF07F3722753Db48f1C967D97EeFCdD837a247105, 5470000000000000000, 18));
+        tokens.push(TokenConfig("WLFI", 0x3eEFe62cb64E762B2C207A5e901a16e616a0Dc7c, 148292000000000000, 18));
+        tokens.push(TokenConfig("XRP", 0xeF28F15FfF0dF624C7cAFe1Fcd59A73f366559cA, 2050000000000000000, 18));
+        tokens.push(TokenConfig("ZEN", 0xAdc745FbacA7D2F6857A19C64f1D0b26094E1033, 9100000000000000000, 18));
+    }
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -38,53 +58,23 @@ contract UpdateOraclePrices is Script {
 
         MockOracle oracle = MockOracle(MOCK_ORACLE);
 
-        // Prepare tokens and prices arrays (all 10 tokens)
-        address[] memory tokens = new address[](10);
-        tokens[0] = ZRX;
-        tokens[1] = ARKM;
-        tokens[2] = FET;
-        tokens[3] = KAITO;
-        tokens[4] = NEAR;
-        tokens[5] = NOS;
-        tokens[6] = PAAL;
-        tokens[7] = RENDER;
-        tokens[8] = TAO;
-        tokens[9] = VIRTUAL;
+        address[] memory tokenAddrs = new address[](tokens.length);
+        uint256[] memory prices = new uint256[](tokens.length);
+        uint8[] memory decimals = new uint8[](tokens.length);
 
-        // Real-world prices as of October 24, 2025 (with 6 decimals)
-        uint256[] memory prices = new uint256[](10);
-        prices[0] = 250_000;      // 0X0 (ZRX): $0.25
-        prices[1] = 357_894;      // ARKM: $0.357894
-        prices[2] = 250_000;      // FET: $0.25
-        prices[3] = 1_040_000;    // KAITO: $1.04
-        prices[4] = 2_200_000;    // NEAR: $2.20
-        prices[5] = 434_900;      // NOS: $0.4349
-        prices[6] = 40_000;       // PAAL: $0.04
-        prices[7] = 2_470_000;    // RENDER: $2.47
-        prices[8] = 386_035_230;  // TAO: $386.035230
-        prices[9] = 1_300_000;    // VIRTUAL: $1.30
-
-        // Set token decimals (all are 18 decimals)
-        uint8[] memory decimals = new uint8[](10);
-        for (uint256 i = 0; i < 10; i++) {
-            decimals[i] = 18;
+        for (uint256 i = 0; i < tokens.length; i++) {
+            tokenAddrs[i] = tokens[i].addr;
+            prices[i] = tokens[i].price;
+            decimals[i] = tokens[i].decimals;
         }
-        oracle.setTokenDecimalsBatch(tokens, decimals);
 
-        // Update prices
-        oracle.setPrices(tokens, prices);
+        oracle.setTokenDecimalsBatch(tokenAddrs, decimals);
+        oracle.setPrices(tokenAddrs, prices);
 
         console.log("\n=== Real-World Prices Updated (Oct 24, 2025) ===");
-        console.log("0X0 (ZRX) price set to $0.25");
-        console.log("ARKM price set to $0.357894");
-        console.log("FET price set to $0.25");
-        console.log("KAITO price set to $1.04");
-        console.log("NEAR price set to $2.20");
-        console.log("NOS price set to $0.4349");
-        console.log("PAAL price set to $0.04");
-        console.log("RENDER price set to $2.47");
-        console.log("TAO price set to $386.035230");
-        console.log("VIRTUAL price set to $1.30");
+        for (uint256 i = 0; i < tokens.length; i++) {
+            console.log(tokens[i].name, "price set");
+        }
         console.log("\nAll token decimals set to 18");
 
         vm.stopBroadcast();

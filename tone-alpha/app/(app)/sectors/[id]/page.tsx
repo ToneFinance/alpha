@@ -11,13 +11,14 @@ export function generateStaticParams() {
 }
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function SectorDetailPage({ params }: PageProps) {
-  const sector = getSectorById(params.id);
+export default async function SectorDetailPage({ params }: PageProps) {
+  const { id } = await params;
+  const sector = getSectorById(id);
 
   // If sector not found, show 404
   if (!sector) {

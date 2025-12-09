@@ -199,23 +199,17 @@ The vault uses oracle-based NAV calculation for fair share pricing:
 
 ## Contract Addresses (Base Sepolia)
 
-### Core Contracts
-- **SectorVault**: [`0x629Eea75B6932bC214fF9486bcA86012483771C1`](https://sepolia.basescan.org/address/0x629Eea75B6932bC214fF9486bcA86012483771C1)
-- **SectorToken (AI)**: [`0x4929A55D1FE9d99fea2589A51812BEb858A7cce6`](https://sepolia.basescan.org/address/0x4929A55D1FE9d99fea2589A51812BEb858A7cce6)
-- **MockOracle**: [`0x74148B54A83a34E524D54519655CB70aeCa29087`](https://sepolia.basescan.org/address/0x74148B54A83a34E524D54519655CB70aeCa29087)
+### Shared Infrastructure
+- **MockOracle**: [`0x8E6596749b8aDa46195C04e03297469aFA2fd4F3`](https://sepolia.basescan.org/address/0xF6529F44C596fB1c9440F427d1c65b5E1EDfB9c1)
 - **Quote Token (USDC)**: [`0x036CbD53842c5426634e7929541eC2318f3dCF7e`](https://sepolia.basescan.org/address/0x036cbd53842c5426634e7929541ec2318f3dcf7e)
 
-### AI Sector Tokens (10 Mock Tokens)
-- **0X0**: [`0xa211A5cfE0e439335B05c6Ed395B7620CEd96f47`](https://sepolia.basescan.org/address/0xa211A5cfE0e439335B05c6Ed395B7620CEd96f47)
-- **ARKM**: [`0x6303a6970B556Ad28716Dd121168a0E24Ad04991`](https://sepolia.basescan.org/address/0x6303a6970B556Ad28716Dd121168a0E24Ad04991)
-- **FET**: [`0x4e34e52228F463177d004C0AB182c93245cd8699`](https://sepolia.basescan.org/address/0x4e34e52228F463177d004C0AB182c93245cd8699)
-- **KAITO**: [`0xE0d85812f9eFc36c5678526c22dFD4D9053F8761`](https://sepolia.basescan.org/address/0xE0d85812f9eFc36c5678526c22dFD4D9053F8761)
-- **NEAR**: [`0xFa062193e84fB02bf9851db2F162983164f4Afa7`](https://sepolia.basescan.org/address/0xFa062193e84fB02bf9851db2F162983164f4Afa7)
-- **NOS**: [`0xE461cD97A8Ca854b4bB146715FE76A27E211C264`](https://sepolia.basescan.org/address/0xE461cD97A8Ca854b4bB146715FE76A27E211C264)
-- **PAAL**: [`0x1dA3225323123012250A3A8904ED52Fb37B7dB9E`](https://sepolia.basescan.org/address/0x1dA3225323123012250A3A8904ED52Fb37B7dB9E)
-- **RENDER**: [`0xffC8eaAa6471846e70E1EA57d2Be985B5e25E8dc`](https://sepolia.basescan.org/address/0xffC8eaAa6471846e70E1EA57d2Be985B5e25E8dc)
-- **TAO**: [`0x0C22b7Ae4863C51A9404a50dCcdB8c887FcB1736`](https://sepolia.basescan.org/address/0x0C22b7Ae4863C51A9404a50dCcdB8c887FcB1736)
-- **VIRTUAL**: [`0x14326A86AD69769f0A7C917492ABB807cA8BC25A`](https://sepolia.basescan.org/address/0x14326A86AD69769f0A7C917492ABB807cA8BC25A)
+### AI Sector
+- **SectorVault (AI)**: [`0x2eC9856556c6E7cF626542fc620822136d698320`](https://sepolia.basescan.org/address/0xb42704874513Ff4877cD571A747B2b07F0d22D8A)
+- **SectorToken (tAI)**: [`0xef303C9eD9eD15606dF2c40a4fFb67907F5631BE`](https://sepolia.basescan.org/address/0x0128A1cAa7b8757B148cDbc454956E64cB620806)
+
+### Made in America Sector
+- **SectorVault (USA)**: [`0x368167Fc17EC24906233104c21f3919A8cE43D99`](https://sepolia.basescan.org/address/0x84Ceed008c36afA34DAD94c7bD7F0A3Ba073D464)
+- **SectorToken (tUSA)**: [`0x9BF24297bF3bD256a7EA6e840EF6f9B2fA108b88`](https://sepolia.basescan.org/address/0x36a6760a6f88C857525F79e5089962235373F94D)
 
 ## Key Features (Alpha)
 
