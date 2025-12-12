@@ -20,8 +20,7 @@
   margin: 0 auto;
 }
 
-.comingSoonIcon {
-  font-size: 80px;
+.comingSoon > div {
   margin-bottom: 24px;
 }
 
@@ -62,11 +61,6 @@
   gap: 16px;
 }
 
-.icon {
-  font-size: 40px;
-  line-height: 1;
-  flex-shrink: 0;
-}
 
 .title {
   font-size: 28px;
@@ -153,9 +147,6 @@
     gap: 12px;
   }
 
-  .icon {
-    font-size: 48px;
-  }
 
   .title {
     font-size: 24px;
@@ -178,9 +169,6 @@
     padding: 60px 20px;
   }
 
-  .comingSoonIcon {
-    font-size: 64px;
-  }
 
   .comingSoon h1 {
     font-size: 24px;

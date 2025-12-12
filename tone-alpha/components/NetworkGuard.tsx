@@ -32,7 +32,7 @@ export function NetworkGuard() {
       // Prompt user to switch to the correct network
       switchChain({ chainId: baseSepolia.id });
     }
-  }, [isConnected, currentChainId, switchChain, address]);
+  }, [isConnected, currentChainId, switchChain, address, hasPromptedRef]);
 
   return null;
 }

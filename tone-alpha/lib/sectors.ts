@@ -11,7 +11,7 @@ export interface SectorConfig {
   tokenAddress: `0x${string}`;
   quoteTokenAddress: `0x${string}`;
   color: string; // For UI theming
-  icon?: string; // Optional icon/emoji
+  symbol?: string; // Token symbol for logo display
   isActive: boolean;
 }
 
@@ -24,8 +24,8 @@ export const SECTORS: Record<string, SectorConfig> = {
     vaultAddress: "0x2eC9856556c6E7cF626542fc620822136d698320",
     tokenAddress: "0xef303C9eD9eD15606dF2c40a4fFb67907F5631BE",
     quoteTokenAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
-    color: "#667eea",
-    icon: "🤖",
+    color: "#3b82f6",
+    symbol: "tAI",
     isActive: true,
   },
   usa: {
@@ -35,8 +35,8 @@ export const SECTORS: Record<string, SectorConfig> = {
     vaultAddress: "0x368167Fc17EC24906233104c21f3919A8cE43D99",
     tokenAddress: "0x9BF24297bF3bD256a7EA6e840EF6f9B2fA108b88",
     quoteTokenAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
-    color: "#f093fb",
-    icon: "🇺🇸",
+    color: "#ef4444",
+    symbol: "tUSA",
     isActive: true,
   },
 } as const;

@@ -26,20 +26,6 @@
   align-items: flex-start;
 }
 
-.iconWrapper {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.icon {
-  font-size: 28px;
-  line-height: 1;
-}
 
 .headerContent {
   flex: 1;

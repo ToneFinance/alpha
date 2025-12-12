@@ -5,6 +5,7 @@ import { SectorConfig } from "@/lib/sectors";
 import { StatCard } from "@/components/StatCard";
 import { BasketComposition } from "@/components/BasketComposition";
 import { TradePanel } from "@/components/TradePanel";
+import { TokenLogo } from "@/components/TokenLogo";
 import { useSectorVault, useTokenMetadata, formatTokenAmountTo2Decimals } from "@/lib/hooks/useMultiSectorVault";
 import { sdk } from "@farcaster/miniapp-sdk";
 import styles from "./page.module.css";
@@ -43,7 +44,7 @@ export function SectorDetailClient({ sector }: SectorDetailClientProps) {
     return (
       <div className={styles.container}>
         <div className={styles.comingSoon}>
-          <span className={styles.comingSoonIcon}>{sector.icon || "📊"}</span>
+          <TokenLogo symbol={sector.symbol || "T"} color={sector.color} size="lg" />
           <h1>{sector.name}</h1>
           <p>{sector.description}</p>
           <div className={styles.comingSoonBadge}>Coming Soon</div>
@@ -57,9 +58,7 @@ export function SectorDetailClient({ sector }: SectorDetailClientProps) {
       {/* Compact Header */}
       <div className={styles.header}>
         <div className={styles.headerTitle}>
-          <span className={styles.icon} style={{ color: sector.color }}>
-            {sector.icon || "📊"}
-          </span>
+          <TokenLogo symbol={sector.symbol || "T"} color={sector.color} size="md" />
           <div>
             <h1 className={styles.title}>{sector.name}</h1>
             <p className={styles.description}>{sector.description}</p>

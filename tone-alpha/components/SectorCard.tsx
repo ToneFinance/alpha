@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { SectorConfig } from "@/lib/sectors";
 import { useSectorVault, useTokenMetadata, formatTokenAmountTo2Decimals } from "@/lib/hooks/useMultiSectorVault";
+import { TokenLogo } from "@/components/TokenLogo";
 import { ArrowRight } from "lucide-react";
 import styles from "./SectorCard.module.css";
 
@@ -23,11 +24,7 @@ export function SectorCard({ sector }: SectorCardProps) {
   return (
     <Link href={`/sectors/${sector.id}`} className={styles.sectorCard}>
       <div className={styles.cardHeader}>
-        <div className={styles.iconWrapper} style={{ background: `${sector.color}20` }}>
-          <span className={styles.icon} style={{ color: sector.color }}>
-            {sector.icon || "📊"}
-          </span>
-        </div>
+        <TokenLogo symbol={sector.symbol || "T"} color={sector.color} size="md" />
         <div className={styles.headerContent}>
           <h3 className={styles.sectorName}>{sector.name}</h3>
           <p className={styles.sectorDescription}>{sector.description}</p>
