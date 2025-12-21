@@ -39,7 +39,7 @@ export function ToneChart({ sector }: ToneChartProps) {
         if (!response.ok) {
           throw new Error("Failed to fetch chart data");
         }
-        const data = await response.json();
+        const data = await response.json() as ChartResponse;
         setChartData(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
