@@ -18,7 +18,7 @@ interface ChartResponse {
   lastUpdated: string;
 }
 
-type Timeframe = "7d" | "30d" | "90d";
+type Timeframe = "7d" | "30d" | "90d" | "1y";
 
 interface ToneChartProps {
   sector: SectorConfig;
@@ -28,7 +28,7 @@ export function ToneChart({ sector }: ToneChartProps) {
   const [chartData, setChartData] = useState<ChartResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("30d");
+  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("1y");
 
   useEffect(() => {
     const fetchChartData = async () => {
@@ -141,7 +141,7 @@ export function ToneChart({ sector }: ToneChartProps) {
           <h2 className={styles.title}>Price Chart</h2>
         </div>
         <div className={styles.timeframeButtons}>
-          {(["7d", "30d", "90d"] as Timeframe[]).map((tf) => (
+          {(["7d", "30d", "90d", "1y"] as const).map((tf) => (
             <button
               key={tf}
               className={`${styles.timeframeButton} ${selectedTimeframe === tf ? styles.active : ""}`}

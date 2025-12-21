@@ -118,6 +118,9 @@ function getDateRange(timeframe: string): { from: Date; to: Date } {
     case "90d":
       from.setDate(from.getDate() - 90);
       break;
+    case "1y":
+      from.setDate(from.getDate() - 365);
+      break;
     case "30d":
     default:
       from.setDate(from.getDate() - 30);
