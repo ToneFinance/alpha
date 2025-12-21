@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { SectorConfig } from "@/lib/sectors";
 import { StatCard } from "@/components/StatCard";
+import { ToneChart } from "@/components/ToneChart";
 import { BasketComposition } from "@/components/BasketComposition";
 import { TradePanel } from "@/components/TradePanel";
 import { TokenLogo } from "@/components/TokenLogo";
@@ -89,6 +90,8 @@ export function SectorDetailClient({ sector }: SectorDetailClientProps) {
       <div className={styles.layout}>
         {/* Main Content */}
         <div className={styles.mainContent}>
+          <ToneChart sector={sector} />
+
           <BasketComposition sector={sector} />
 
           {/* About Section */}
