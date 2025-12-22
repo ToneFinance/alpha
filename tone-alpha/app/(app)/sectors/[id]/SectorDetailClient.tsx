@@ -7,6 +7,7 @@ import { ToneChart } from "@/components/ToneChart";
 import { BasketComposition } from "@/components/BasketComposition";
 import { TradePanel } from "@/components/TradePanel";
 import { TokenLogo } from "@/components/TokenLogo";
+import { PendingTransactions } from "@/components/PendingTransactions";
 import { useSectorVault, useTokenMetadata, formatTokenAmountTo2Decimals } from "@/lib/hooks/useMultiSectorVault";
 import { sdk } from "@farcaster/miniapp-sdk";
 import styles from "./page.module.css";
@@ -90,6 +91,9 @@ export function SectorDetailClient({ sector }: SectorDetailClientProps) {
       <div className={styles.layout}>
         {/* Main Content */}
         <div className={styles.mainContent}>
+          {/* Pending Transactions */}
+          <PendingTransactions sector={sector} />
+
           <ToneChart sector={sector} />
 
           <BasketComposition sector={sector} />

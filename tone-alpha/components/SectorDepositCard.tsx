@@ -19,7 +19,7 @@ interface SectorDepositCardProps {
 }
 
 export function SectorDepositCard({ sector }: SectorDepositCardProps) {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const [amount, setAmount] = useState("");
   const [displayError, setDisplayError] = useState<string | null>(null);
   const depositAmountRef = useRef<bigint>(0n);
@@ -28,7 +28,7 @@ export function SectorDepositCard({ sector }: SectorDepositCardProps) {
 
   const { quoteTokenBalance, quoteTokenAllowance, refetchAll } = useSectorVault(sector);
   const { approve, isPending: isApproving, isConfirming: isApprovingConfirming, isSuccess: isApproved, hash: approveHash, isError: approveError, error: approveErrorMsg } = useApproveQuoteToken(sector);
-  const { deposit, isPending: isDepositing, isConfirming: isDepositingConfirming, isSuccess: isDeposited, isError: depositError, error: depositErrorMsg } = useDeposit(sector);
+  const { deposit, isPending: isDepositing, isConfirming: isDepositingConfirming, isSuccess: isDeposited, receipt, isError: depositError, error: depositErrorMsg } = useDeposit(sector);
 
   // Fetch dynamic token metadata
   const quoteToken = useTokenMetadata(sector.quoteTokenAddress);
@@ -79,6 +79,7 @@ export function SectorDepositCard({ sector }: SectorDepositCardProps) {
   useEffect(() => {
     if (isDeposited) {
       refetchAll();
+
       // Trigger confetti
       confetti({
         particleCount: 100,

@@ -310,6 +310,115 @@ export function useNextDepositId(sector: SectorConfig) {
 }
 
 /**
+ * Hook to get the next withdrawal ID for a sector
+ */
+export function useNextWithdrawalId(sector: SectorConfig) {
+  const sectorVaultConfig = {
+    address: sector.vaultAddress,
+    abi: ABIS.SectorVault,
+  } as const;
+
+  const { data: nextWithdrawalId, refetch } = useReadContract({
+    ...sectorVaultConfig,
+    functionName: "nextWithdrawalId",
+    query: {
+      refetchInterval: 3000, // Poll every 3 seconds
+    },
+  });
+
+  return {
+    nextWithdrawalId: nextWithdrawalId as bigint | undefined,
+    refetch,
+  };
+}
+
+/**
+ * Hook to fetch all pending deposits for the current user
+ * Scans recent deposit IDs to find those belonging to the user
+ */
+export function useUserPendingDeposits(sector: SectorConfig) {
+  const { address } = useAccount();
+  const { nextDepositId } = useNextDepositId(sector);
+
+  // Check last 50 deposit IDs (reasonable number to avoid too many RPC calls)
+  const startId = nextDepositId && nextDepositId > 50n ? nextDepositId - 50n : 0n;
+  const count = nextDepositId ? Number(nextDepositId - startId) : 0;
+
+  // Generate array of IDs to check
+  const depositIds = Array.from({ length: Math.min(count, 50) }, (_, i) => startId + BigInt(i));
+
+  // Create individual hooks for each deposit ID (fixed number of hooks)
+  const maxDeposits = 50;
+  const hooks = Array.from({ length: maxDeposits }, (_, i) => {
+    const id = i < depositIds.length ? depositIds[i] : undefined;
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const { pendingDeposit } = usePendingDeposit(sector, id);
+    return { id, data: pendingDeposit };
+  });
+
+  // Filter for user's unfulfilled deposits
+  const pendingDeposits = hooks
+    .filter(({ id, data }) => {
+      if (!id || !data || !address) return false;
+      const [user, , fulfilled] = data as [string, bigint, boolean, bigint];
+      return user.toLowerCase() === address.toLowerCase() && !fulfilled;
+    })
+    .map(({ id, data }) => {
+      const [, quoteAmount, , timestamp] = data as [string, bigint, boolean, bigint];
+      return {
+        id: id!,
+        quoteAmount,
+        timestamp,
+      };
+    });
+
+  return { pendingDeposits };
+}
+
+/**
+ * Hook to fetch all pending withdrawals for the current user
+ * Scans recent withdrawal IDs to find those belonging to the user
+ */
+export function useUserPendingWithdrawals(sector: SectorConfig) {
+  const { address } = useAccount();
+  const { nextWithdrawalId } = useNextWithdrawalId(sector);
+
+  // Check last 50 withdrawal IDs (reasonable number to avoid too many RPC calls)
+  const startId = nextWithdrawalId && nextWithdrawalId > 50n ? nextWithdrawalId - 50n : 0n;
+  const count = nextWithdrawalId ? Number(nextWithdrawalId - startId) : 0;
+
+  // Generate array of IDs to check
+  const withdrawalIds = Array.from({ length: Math.min(count, 50) }, (_, i) => startId + BigInt(i));
+
+  // Create individual hooks for each withdrawal ID (fixed number of hooks)
+  const maxWithdrawals = 50;
+  const hooks = Array.from({ length: maxWithdrawals }, (_, i) => {
+    const id = i < withdrawalIds.length ? withdrawalIds[i] : undefined;
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const { pendingWithdrawal } = usePendingWithdrawal(sector, id);
+    return { id, data: pendingWithdrawal };
+  });
+
+  // Filter for user's unfulfilled withdrawals
+  const pendingWithdrawals = hooks
+    .filter(({ id, data }) => {
+      if (!id || !data || !address) return false;
+      const [user, , fulfilled] = data as [string, bigint, boolean, bigint];
+      return user.toLowerCase() === address.toLowerCase() && !fulfilled;
+    })
+    .map(({ id, data }) => {
+      const [, sharesAmount, , timestamp] = data as [string, bigint, boolean, bigint];
+      return {
+        id: id!,
+        sharesAmount,
+        timestamp,
+      };
+    });
+
+  return { pendingWithdrawals };
+}
+
+/**
  * Hook to fetch token metadata (symbol, decimals, name)
  */
 export function useTokenMetadata(tokenAddress: string | undefined) {
