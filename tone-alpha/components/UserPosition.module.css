@@ -2,35 +2,35 @@
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 20px;
+  padding: 12px;
 }
 
 .title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  margin: 0 0 16px 0;
+  margin: 0 0 8px 0;
   color: var(--foreground);
 }
 
 .connectMessage {
   text-align: center;
-  padding: 20px;
+  padding: 8px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 12px;
   margin: 0;
 }
 
 .stats {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
 }
 
 .statRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
+  padding: 6px 0;
   border-bottom: 1px solid var(--card-border);
 }
 
@@ -39,25 +39,25 @@
 }
 
 .label {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
 .value {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .emptyMessage {
-  margin: 16px 0 0 0;
-  padding: 16px;
+  margin: 8px 0 0 0;
+  padding: 10px;
   background: var(--input-bg);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 6px;
+  font-size: 11px;
   color: var(--text-secondary);
   text-align: center;
-  line-height: 1.5;
+  line-height: 1.3;
 }

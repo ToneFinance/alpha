@@ -1,9 +1,9 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 8px;
   position: sticky;
-  top: calc(var(--navbar-height) + 20px);
+  top: calc(var(--navbar-height) + 8px);
 }
 
 .tradeSection {
@@ -21,11 +21,11 @@
 }
 
 .tab {
-  padding: 16px;
+  padding: 10px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -56,10 +56,10 @@
 }
 
 /* Override card styles for embedded cards */
-.tabContent :global(.card) {
-  border: none;
-  border-radius: 0;
-  background: transparent;
+.tabContent > * {
+  border: none !important;
+  border-radius: 0 !important;
+  max-width: none !important;
 }
 
 @media (max-width: 1024px) {

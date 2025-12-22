@@ -2,19 +2,19 @@
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 12px;
-  padding: 24px;
+  padding: 12px;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  gap: 16px;
+  margin-bottom: 8px;
+  gap: 8px;
 }
 
 .title {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   margin: 0;
   color: var(--foreground);
@@ -22,16 +22,16 @@
 
 .timeframeButtons {
   display: flex;
-  gap: 8px;
+  gap: 4px;
 }
 
 .timeframeButton {
-  padding: 6px 12px;
+  padding: 4px 8px;
   border: 1px solid var(--card-border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -54,20 +54,20 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
 
 .currentPrice {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .priceChange {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
-  margin-top: 4px;
+  margin-top: 1px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -81,17 +81,17 @@
 
 .chartWrapper {
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   background: var(--input-bg);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 6px;
+  padding: 10px;
 }
 
 .chart {
   width: 100%;
   height: auto;
   aspect-ratio: 3 / 1;
-  min-height: 220px;
+  min-height: 160px;
   display: block;
   font-family: inherit;
 }
@@ -108,12 +108,12 @@
 .footer {
   display: flex;
   justify-content: flex-end;
-  padding-top: 12px;
+  padding-top: 6px;
   border-top: 1px solid var(--card-border);
 }
 
 .footerText {
-  font-size: 12px;
+  font-size: 10px;
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
