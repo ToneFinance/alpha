@@ -62,14 +62,21 @@ func main() {
 	var fulfillers []*Fulfiller
 	var listeners []*EventListener
 
+	acc := &fulfillerAccount{
+		nonce:       nil, // fetch on first use
+		fromAddress: fromAddress,
+		privateKey:  privateKey,
+		client:      client,
+	}
+
 	for _, vaultConfig := range config.SectorVaults {
-		Logger.Info("Initializing vault",
+		Logger.Debug("Initializing vault",
 			"vault_name", vaultConfig.Name,
 			"vault_address", vaultConfig.Address.Hex(),
 		)
 
 		// Create fulfiller for this vault
-		fulfiller, err := NewFulfiller(config, vaultConfig, privateKey, fromAddress)
+		fulfiller, err := NewFulfiller(config, vaultConfig, acc)
 		if err != nil {
 			Logger.Error("Failed to create fulfiller",
 				"vault_name", vaultConfig.Name,
@@ -116,8 +123,6 @@ func main() {
 			}
 		}(listener, vaultName)
 	}
-
-	Logger.Info("All event listeners started successfully")
 
 	// Wait for shutdown signal or listener error
 	select {

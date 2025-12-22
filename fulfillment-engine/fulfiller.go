@@ -22,15 +22,22 @@ const (
 	txSyncDelay = 2 * time.Second
 )
 
+type fulfillerAccount struct {
+	mu    sync.Mutex
+	nonce *uint64
+
+	fromAddress common.Address
+	privateKey  *ecdsa.PrivateKey
+	client      *ethclient.Client
+}
+
 type Fulfiller struct {
 	client            *ethclient.Client
 	config            *Config
-	vaultConfig       VaultConfig // Specific vault this fulfiller manages
-	privateKey        *ecdsa.PrivateKey
-	fromAddress       common.Address
-	nonce             *uint64                  // Track nonce manually
+	vaultConfig       VaultConfig              // Specific vault this fulfiller manages
+	account           *fulfillerAccount        // account to use for fullfillments
 	wg                sync.WaitGroup           // Track in-flight fulfillments
-	mu                sync.Mutex               // Protect nonce access
+	mu                sync.Mutex               // protectes the approvedTokens, tokenDecimals map
 	underlyingTokens  []common.Address         // Cached underlying tokens
 	underlyingWeights []*big.Int               // Cached underlying weights
 	approvedTokens    map[common.Address]bool  // Track which tokens have max approval
@@ -41,19 +48,12 @@ type Fulfiller struct {
 	tokenDecimals     map[common.Address]uint8 // Underlying token decimals
 }
 
-func NewFulfiller(config *Config, vaultConfig VaultConfig, privateKey *ecdsa.PrivateKey, fromAddress common.Address) (*Fulfiller, error) {
-	client, err := ethclient.Dial(config.RPCURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to ethereum client: %v", err)
-	}
-
+func NewFulfiller(config *Config, vaultConfig VaultConfig, account *fulfillerAccount) (*Fulfiller, error) {
 	fulfiller := &Fulfiller{
-		client:         client,
+		account:        account,
+		client:         account.client,
 		config:         config,
 		vaultConfig:    vaultConfig,
-		privateKey:     privateKey,
-		fromAddress:    fromAddress,
-		nonce:          nil, // Will be fetched on first transaction
 		approvedTokens: make(map[common.Address]bool),
 		tokenDecimals:  make(map[common.Address]uint8),
 	}
@@ -105,7 +105,7 @@ func NewFulfiller(config *Config, vaultConfig VaultConfig, privateKey *ecdsa.Pri
 	Logger.Info("Fulfiller initialized for vault",
 		"vault_name", vaultConfig.Name,
 		"vault_address", vaultConfig.Address.Hex(),
-		"fulfiller_address", fromAddress.Hex(),
+		"fulfiller_address", account.fromAddress.Hex(),
 		"oracle_address", oracleAddr.Hex(),
 		"oracle_decimals", oracleDecimals,
 		"quote_token", quoteTokenAddr.Hex(),
@@ -132,22 +132,11 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 	default:
 	}
 
-	Logger.Info("Starting deposit fulfillment",
-		"deposit_id", depositId.String(),
-		"quote_amount", quoteAmount.String(),
-	)
-
 	// Fetch token prices from oracle
 	tokenPrices := make([]*big.Int, len(f.underlyingTokens))
 	for i, token := range f.underlyingTokens {
 		price, err := f.getTokenPrice(ctx, token)
 		if err != nil {
-			Logger.Error("Failed to get token price",
-				"deposit_id", depositId.String(),
-				"token_index", i,
-				"token", token.Hex(),
-				"error", err,
-			)
 			return fmt.Errorf("failed to get price for token %s: %v", token.Hex(), err)
 		}
 		tokenPrices[i] = price
@@ -296,22 +285,12 @@ func (f *Fulfiller) FulfillDeposit(ctx context.Context, depositId *big.Int, quot
 	}
 
 	// Ensure all tokens have max approval (only approves once per token)
-	for i, token := range f.underlyingTokens {
+	for _, token := range f.underlyingTokens {
 		if err := f.ensureTokenApproval(ctx, token); err != nil {
-			Logger.Error("Failed to ensure token approval",
-				"deposit_id", depositId.String(),
-				"token_index", i,
-				"token", token.Hex(),
-				"error", err,
-			)
 			return fmt.Errorf("failed to ensure approval for token %s: %v", token.Hex(), err)
 		}
 	}
 	if err := f.callFulfillDeposit(ctx, depositId, underlyingAmounts); err != nil {
-		Logger.Error("Failed to fulfill deposit",
-			"deposit_id", depositId.String(),
-			"error", err,
-		)
 		return fmt.Errorf("failed to call fulfillDeposit: %v", err)
 	}
 
@@ -362,13 +341,8 @@ func (f *Fulfiller) FulfillWithdrawal(ctx context.Context, withdrawalId *big.Int
 	)
 
 	// Check if fulfiller has enough USDC balance
-	usdcBalance, err := f.getTokenBalance(ctx, f.quoteTokenAddress, f.fromAddress)
+	usdcBalance, err := f.getTokenBalance(ctx, f.quoteTokenAddress, f.account.fromAddress)
 	if err != nil {
-		Logger.Error("Failed to get USDC balance",
-			"vault_name", f.vaultConfig.Name,
-			"withdrawal_id", withdrawalId.String(),
-			"error", err,
-		)
 		return fmt.Errorf("failed to get USDC balance: %v", err)
 	}
 
@@ -492,7 +466,7 @@ func (f *Fulfiller) callFulfillWithdrawal(ctx context.Context, withdrawalId *big
 		return fmt.Errorf("pack call: %w", err)
 	}
 
-	tx, err := f.sendTransaction(ctx, f.vaultConfig.Address, big.NewInt(0), data)
+	tx, err := f.account.sendTransaction(ctx, f.vaultConfig.Address, big.NewInt(0), data)
 	if err != nil {
 		return fmt.Errorf("send: %w", err)
 	}
@@ -598,7 +572,7 @@ func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Addres
 		minAllowance.SetString("1000000000000000000000000000000000000000000000000000000000000000000000", 10) // 10^70
 
 		if allowance.Cmp(minAllowance) >= 0 {
-			Logger.Info("Token already has sufficient allowance, skipping approval",
+			Logger.Debug("Token already has sufficient allowance, skipping approval",
 				"token", token.Hex(),
 				"allowance", allowance.String(),
 			)
@@ -609,7 +583,7 @@ func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Addres
 			return nil
 		}
 
-		Logger.Info("Current allowance insufficient, approving max amount",
+		Logger.Debug("Current allowance insufficient, approving max amount",
 			"token", token.Hex(),
 			"current_allowance", allowance.String(),
 		)
@@ -622,15 +596,15 @@ func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Addres
 	parsedABI, _ := ParseERC20ABI()
 	data, err := parsedABI.Pack("approve", f.vaultConfig.Address, maxUint256)
 	if err != nil {
-		return err
+		return fmt.Errorf("pack 'approve': %w", err)
 	}
 
-	tx, err := f.sendTransaction(ctx, token, big.NewInt(0), data)
+	tx, err := f.account.sendTransaction(ctx, token, big.NewInt(0), data)
 	if err != nil {
 		return err
 	}
 
-	Logger.Info("Max approval transaction sent",
+	Logger.Debug("Max approval transaction sent",
 		"token", token.Hex(),
 		"tx_hash", tx.Hash().Hex(),
 	)
@@ -650,7 +624,7 @@ func (f *Fulfiller) ensureTokenApproval(ctx context.Context, token common.Addres
 	f.approvedTokens[token] = true
 	f.mu.Unlock()
 
-	Logger.Info("Max approval confirmed",
+	Logger.Debug("Max approval confirmed",
 		"token", token.Hex(),
 		"tx_hash", tx.Hash().Hex(),
 	)
@@ -664,7 +638,7 @@ func (f *Fulfiller) getAllowance(ctx context.Context, token common.Address) (*bi
 		return nil, err
 	}
 
-	data, err := parsedABI.Pack("allowance", f.fromAddress, f.vaultConfig.Address)
+	data, err := parsedABI.Pack("allowance", f.account.fromAddress, f.vaultConfig.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -694,7 +668,7 @@ func (f *Fulfiller) callFulfillDeposit(ctx context.Context, depositId *big.Int, 
 		return err
 	}
 
-	tx, err := f.sendTransaction(ctx, f.vaultConfig.Address, big.NewInt(0), data)
+	tx, err := f.account.sendTransaction(ctx, f.vaultConfig.Address, big.NewInt(0), data)
 	if err != nil {
 		return err
 	}
@@ -706,7 +680,7 @@ func (f *Fulfiller) callFulfillDeposit(ctx context.Context, depositId *big.Int, 
 
 	// Wait for transaction to be mined
 	if err := f.waitForTransaction(ctx, tx); err != nil {
-		Logger.Error("Fulfill deposit transaction failed",
+		Logger.Debug("Fulfill deposit transaction failed",
 			"deposit_id", depositId.String(),
 			"tx_hash", tx.Hash().Hex(),
 			"error", err,
@@ -721,7 +695,7 @@ func (f *Fulfiller) callFulfillDeposit(ctx context.Context, depositId *big.Int, 
 	return nil
 }
 
-func (f *Fulfiller) sendTransaction(ctx context.Context, to common.Address, value *big.Int, data []byte) (*types.Transaction, error) {
+func (f *fulfillerAccount) sendTransaction(ctx context.Context, to common.Address, value *big.Int, data []byte) (*types.Transaction, error) {
 	// Get or fetch nonce (with mutex protection)
 	f.mu.Lock()
 	var nonce uint64
@@ -745,22 +719,19 @@ func (f *Fulfiller) sendTransaction(ctx context.Context, to common.Address, valu
 
 	gasPrice, err := f.client.SuggestGasPrice(ctx)
 	if err != nil {
-		Logger.Error("Failed to get gas price", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("get gas price: %w", err)
 	}
 
 	chainID, err := f.client.NetworkID(ctx)
 	if err != nil {
-		Logger.Error("Failed to get network ID", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("get network ID: %w", err)
 	}
 
 	tx := types.NewTransaction(nonce, to, value, 8000000, gasPrice, data)
 
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), f.privateKey)
 	if err != nil {
-		Logger.Error("Failed to sign transaction", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("sign: %w", err)
 	}
 
 	err = f.client.SendTransaction(ctx, signedTx)
@@ -846,7 +817,7 @@ func (f *Fulfiller) GetNextDepositId(ctx context.Context) (*big.Int, error) {
 	var nextDepositId *big.Int
 	err = parsedABI.UnpackIntoInterface(&nextDepositId, "nextDepositId", result)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unpack: %w", err)
 	}
 
 	return nextDepositId, nil
@@ -857,7 +828,7 @@ func (f *Fulfiller) GetPendingDeposit(ctx context.Context, depositId *big.Int) (
 
 	data, err := parsedABI.Pack("pendingDeposits", depositId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("pack pendingDeposits: %w", err)
 	}
 
 	result, err := f.client.CallContract(ctx, ethereum.CallMsg{
@@ -961,7 +932,7 @@ func (f *Fulfiller) loadUnderlyingTokens(ctx context.Context) error {
 	f.underlyingTokens = tokens
 	f.underlyingWeights = weights
 
-	Logger.Info("Loaded underlying tokens from vault",
+	Logger.Debug("Loaded underlying tokens from vault",
 		"token_count", len(tokens),
 	)
 	for i, token := range tokens {

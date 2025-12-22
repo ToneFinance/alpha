@@ -46,13 +46,13 @@ func (l *EventListener) Start(ctx context.Context) error {
 	currentBlock := header.Number.Uint64()
 
 	// Always scan for pending deposits on startup
-	Logger.Info("Scanning for pending deposits on startup")
+	Logger.Debug("Scanning for pending deposits on startup", "vault_name", l.vaultConfig.Name)
 	if err := l.scanHistoricalDeposits(ctx); err != nil {
 		Logger.Warn("Error scanning deposits", "error", err)
 	}
 
 	// Always scan for pending withdrawals on startup
-	Logger.Info("Scanning for pending withdrawals on startup")
+	Logger.Debug("Scanning for pending withdrawals on startup", "vault_name", l.vaultConfig.Name)
 	if err := l.scanHistoricalWithdrawals(ctx); err != nil {
 		Logger.Warn("Error scanning withdrawals", "error", err)
 	}
