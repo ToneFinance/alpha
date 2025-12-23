@@ -658,8 +658,8 @@ contract SectorVaultTest is Test {
         // Simulates real-world scenario with prices like: $0.25, $0.35, $0.4684, $2.22, $391.73
 
         // Update prices to varied amounts (similar to real oracle prices)
-        oracle.setPrice(address(token1), 250_000);   // TK1 = $0.25
-        oracle.setPrice(address(token2), 468_400);   // TK2 = $0.4684
+        oracle.setPrice(address(token1), 250_000); // TK1 = $0.25
+        oracle.setPrice(address(token2), 468_400); // TK2 = $0.4684
         oracle.setPrice(address(token3), 2_220_000); // TK3 = $2.22
 
         // User deposits 1000 USDC

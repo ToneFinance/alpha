@@ -44,7 +44,9 @@ contract SectorVaultWithdrawalTest is Test {
     event WithdrawalRequested(
         address indexed user, uint256 indexed withdrawalId, uint256 sharesAmount, uint256 timestamp
     );
-    event WithdrawalFulfilled(address indexed user, uint256 indexed withdrawalId, uint256 usdcAmount, uint256 timestamp);
+    event WithdrawalFulfilled(
+        address indexed user, uint256 indexed withdrawalId, uint256 usdcAmount, uint256 timestamp
+    );
     event WithdrawalCancelled(address indexed user, uint256 indexed withdrawalId, uint256 sharesAmount);
 
     function setUp() public {

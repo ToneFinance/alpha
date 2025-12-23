@@ -39,6 +39,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
     /// @notice Counter for deposit IDs
     uint256 public nextDepositId;
 
+    /// @notice Minimum active deposit ID (all IDs below this are fulfilled or cancelled)
+    uint256 public minActiveDepositId;
+
     /// @notice Struct representing a pending deposit
     struct PendingDeposit {
         address user;
@@ -53,6 +56,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
     /// @notice Counter for withdrawal IDs
     uint256 public nextWithdrawalId;
 
+    /// @notice Minimum active withdrawal ID (all IDs below this are fulfilled or cancelled)
+    uint256 public minActiveWithdrawalId;
+
     /// @notice Struct representing a pending withdrawal
     struct PendingWithdrawal {
         address user;
@@ -63,6 +69,16 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
     /// @notice Mapping of withdrawal ID to pending withdrawal
     mapping(uint256 => PendingWithdrawal) public pendingWithdrawals;
+
+    /// @notice Struct representing a pending rebalance request
+    struct RebalanceRequest {
+        address[] newUnderlyingTokens;
+        uint256[] newTargetWeights;
+        bool pending;
+    }
+
+    /// @notice Current rebalance request (if any)
+    RebalanceRequest public rebalanceRequest;
 
     // Events
     event DepositRequested(address indexed user, uint256 indexed depositId, uint256 quoteAmount, uint256 timestamp);
@@ -89,6 +105,12 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
     event OracleUpdated(address indexed oldOracle, address indexed newOracle);
 
+    event RebalanceRequested(address[] newTokens, uint256[] newWeights);
+
+    event RebalanceFulfilled(address[] newTokens, uint256[] newWeights);
+
+    event RebalanceCancelled();
+
     // Errors
     error InvalidAddress();
     error InvalidAmount();
@@ -102,6 +124,10 @@ contract SectorVault is Ownable, ReentrancyGuard {
     error WithdrawalNotFound();
     error WithdrawalAlreadyFulfilled();
     error FulfillmentUSDCMismatch();
+    error RebalancePending();
+    error NoRebalancePending();
+    error PendingRequestsExist();
+    error RebalanceValueMismatch();
 
     /**
      * @notice Creates a new sector vault
@@ -155,6 +181,7 @@ contract SectorVault is Ownable, ReentrancyGuard {
      * @return depositId ID of the pending deposit
      */
     function deposit(uint256 quoteAmount) external nonReentrant returns (uint256 depositId) {
+        if (rebalanceRequest.pending) revert RebalancePending();
         if (quoteAmount == 0) revert InvalidAmount();
 
         // Transfer quote tokens from user
@@ -233,6 +260,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
         // Clean up: delete the deposit to save storage
         delete pendingDeposits[depositId];
+
+        // Advance minActiveDepositId if this was the earliest pending deposit
+        _advanceMinActiveDepositId();
     }
 
     /**
@@ -260,6 +290,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
         // Clean up: delete the deposit to save storage
         delete pendingDeposits[depositId];
+
+        // Advance minActiveDepositId if this was the earliest pending deposit
+        _advanceMinActiveDepositId();
     }
 
     /**
@@ -298,16 +331,14 @@ contract SectorVault is Ownable, ReentrancyGuard {
      * @return withdrawalId ID of the pending withdrawal
      */
     function requestWithdrawal(uint256 sharesAmount) external nonReentrant returns (uint256 withdrawalId) {
+        if (rebalanceRequest.pending) revert RebalancePending();
         if (sharesAmount == 0) revert InvalidAmount();
         if (SECTOR_TOKEN.balanceOf(msg.sender) < sharesAmount) revert InsufficientShares();
 
         // Create pending withdrawal (tokens stay with user until fulfillment)
         withdrawalId = nextWithdrawalId++;
         pendingWithdrawals[withdrawalId] = PendingWithdrawal({
-            user: msg.sender,
-            sharesAmount: sharesAmount,
-            fulfilled: false,
-            timestamp: block.timestamp
+            user: msg.sender, sharesAmount: sharesAmount, fulfilled: false, timestamp: block.timestamp
         });
 
         emit WithdrawalRequested(msg.sender, withdrawalId, sharesAmount, block.timestamp);
@@ -381,6 +412,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
         // Clean up: delete the withdrawal to save storage
         delete pendingWithdrawals[withdrawalId];
+
+        // Advance minActiveWithdrawalId if this was the earliest pending withdrawal
+        _advanceMinActiveWithdrawalId();
     }
 
     /**
@@ -406,6 +440,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
         // Clean up: delete the withdrawal to save storage
         delete pendingWithdrawals[withdrawalId];
+
+        // Advance minActiveWithdrawalId if this was the earliest pending withdrawal
+        _advanceMinActiveWithdrawalId();
     }
 
     /**
@@ -580,5 +617,165 @@ contract SectorVault is Ownable, ReentrancyGuard {
         for (uint256 i = 0; i < underlyingTokens.length; i++) {
             balances[i] = IERC20(underlyingTokens[i]).balanceOf(address(this));
         }
+    }
+
+    /**
+     * @notice Request a rebalance of the vault's underlying token composition
+     * @dev Only callable by owner. Prevents new deposit/withdrawal requests until rebalance is fulfilled or cancelled.
+     * @param newUnderlyingTokens Array of new underlying token addresses
+     * @param newTargetWeights Array of new target weights (in basis points, sum = 10000)
+     */
+    function requestRebalance(address[] calldata newUnderlyingTokens, uint256[] calldata newTargetWeights)
+        external
+        onlyOwner
+    {
+        if (rebalanceRequest.pending) revert RebalancePending();
+        if (newUnderlyingTokens.length == 0) revert EmptyBasket();
+        if (newUnderlyingTokens.length != newTargetWeights.length) revert InvalidWeights();
+
+        // Validate weights sum to 10000 (100%)
+        uint256 totalWeight;
+        for (uint256 i = 0; i < newTargetWeights.length; i++) {
+            totalWeight += newTargetWeights[i];
+            if (newUnderlyingTokens[i] == address(0)) revert InvalidAddress();
+        }
+        if (totalWeight != 10000) revert InvalidWeights();
+
+        // Store the rebalance request
+        rebalanceRequest.newUnderlyingTokens = newUnderlyingTokens;
+        rebalanceRequest.newTargetWeights = newTargetWeights;
+        rebalanceRequest.pending = true;
+
+        emit RebalanceRequested(newUnderlyingTokens, newTargetWeights);
+    }
+
+    /**
+     * @notice Fulfill a pending rebalance by swapping tokens
+     * @dev Only callable by fulfillment role. All pending deposits/withdrawals must be fulfilled first.
+     * @param newTokenAmounts Array of token amounts to receive (must match newUnderlyingTokens order)
+     */
+    function fulfillRebalance(uint256[] calldata newTokenAmounts) external nonReentrant {
+        if (msg.sender != fulfillmentRole) revert UnauthorizedFulfillment();
+        if (!rebalanceRequest.pending) revert NoRebalancePending();
+        if (newTokenAmounts.length != rebalanceRequest.newUnderlyingTokens.length) revert InvalidAmount();
+
+        // Check that there are no pending deposits or withdrawals
+        // Uses efficient min ID tracking to avoid iterating through all historical requests
+        if (hasPendingRequests()) {
+            revert PendingRequestsExist();
+        }
+
+        // Get current vault value before rebalance
+        uint256 valueBefore = getTotalValue();
+
+        // Transfer old tokens from vault to fulfiller
+        for (uint256 i = 0; i < underlyingTokens.length; i++) {
+            uint256 balance = IERC20(underlyingTokens[i]).balanceOf(address(this));
+            if (balance > 0) {
+                IERC20(underlyingTokens[i]).safeTransfer(msg.sender, balance);
+            }
+        }
+
+        // Transfer new tokens from fulfiller to vault
+        for (uint256 i = 0; i < rebalanceRequest.newUnderlyingTokens.length; i++) {
+            if (newTokenAmounts[i] > 0) {
+                IERC20(rebalanceRequest.newUnderlyingTokens[i])
+                    .safeTransferFrom(msg.sender, address(this), newTokenAmounts[i]);
+            }
+        }
+
+        // Calculate value after rebalance using the new tokens
+        uint256 valueAfter = 0;
+        for (uint256 i = 0; i < rebalanceRequest.newUnderlyingTokens.length; i++) {
+            address token = rebalanceRequest.newUnderlyingTokens[i];
+            uint256 balance = IERC20(token).balanceOf(address(this));
+            if (balance > 0) {
+                valueAfter += oracle.getValue(token, balance);
+            }
+        }
+
+        // Verify vault value is preserved (within tolerance)
+        uint256 tolerance = (valueBefore / 1000) + 1; // 0.1% + 1 wei buffer
+        uint256 difference = valueAfter > valueBefore ? valueAfter - valueBefore : valueBefore - valueAfter;
+
+        if (difference > tolerance) revert RebalanceValueMismatch();
+
+        // Update basket composition
+        // Clear old weights
+        for (uint256 i = 0; i < underlyingTokens.length; i++) {
+            delete targetWeights[underlyingTokens[i]];
+        }
+
+        // Set new basket
+        underlyingTokens = rebalanceRequest.newUnderlyingTokens;
+        for (uint256 i = 0; i < rebalanceRequest.newUnderlyingTokens.length; i++) {
+            targetWeights[rebalanceRequest.newUnderlyingTokens[i]] = rebalanceRequest.newTargetWeights[i];
+        }
+
+        emit BasketUpdated(rebalanceRequest.newUnderlyingTokens, rebalanceRequest.newTargetWeights);
+        emit RebalanceFulfilled(rebalanceRequest.newUnderlyingTokens, rebalanceRequest.newTargetWeights);
+
+        // Clear the rebalance request
+        delete rebalanceRequest;
+    }
+
+    /**
+     * @notice Cancel a pending rebalance request
+     * @dev Only callable by owner
+     */
+    function cancelRebalance() external onlyOwner {
+        if (!rebalanceRequest.pending) revert NoRebalancePending();
+
+        // Clear the rebalance request
+        delete rebalanceRequest;
+
+        emit RebalanceCancelled();
+    }
+
+    /**
+     * @notice Advance minActiveDepositId to skip over fulfilled/cancelled deposits
+     * @dev Called after fulfilling or cancelling a deposit to maintain efficiency
+     */
+    function _advanceMinActiveDepositId() internal {
+        // Skip over all fulfilled/cancelled deposits starting from minActiveDepositId
+        while (minActiveDepositId < nextDepositId && pendingDeposits[minActiveDepositId].user == address(0)) {
+            minActiveDepositId++;
+        }
+    }
+
+    /**
+     * @notice Advance minActiveWithdrawalId to skip over fulfilled/cancelled withdrawals
+     * @dev Called after fulfilling or cancelling a withdrawal to maintain efficiency
+     */
+    function _advanceMinActiveWithdrawalId() internal {
+        // Skip over all fulfilled/cancelled withdrawals starting from minActiveWithdrawalId
+        while (
+            minActiveWithdrawalId < nextWithdrawalId && pendingWithdrawals[minActiveWithdrawalId].user == address(0)
+        ) {
+            minActiveWithdrawalId++;
+        }
+    }
+
+    /**
+     * @notice Check if there are any pending deposits or withdrawals
+     * @dev Uses min active IDs for O(1) check instead of O(n) loop
+     * @return true if there are pending requests, false otherwise
+     */
+    function hasPendingRequests() public view returns (bool) {
+        // Check if there are any pending deposits
+        for (uint256 i = minActiveDepositId; i < nextDepositId; i++) {
+            if (pendingDeposits[i].user != address(0) && !pendingDeposits[i].fulfilled) {
+                return true;
+            }
+        }
+
+        // Check if there are any pending withdrawals
+        for (uint256 i = minActiveWithdrawalId; i < nextWithdrawalId; i++) {
+            if (pendingWithdrawals[i].user != address(0) && !pendingWithdrawals[i].fulfilled) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
