@@ -6,6 +6,8 @@
  * by calling the Findex SimulateFund service
  */
 
+import { getDateRange } from "@/lib/time";
+
 // ============================================================================
 // Type Definitions for Findex API
 // ============================================================================
@@ -102,32 +104,6 @@ const SECTORS: Record<string, SectorConfig> = {
  */
 function fromProtoTimestamp(timestamp: string): Date {
   return new Date(timestamp);
-}
-
-/**
- * Calculate date range based on timeframe
- */
-function getDateRange(timeframe: string): { from: Date; to: Date } {
-  const to = new Date();
-  const from = new Date();
-
-  switch (timeframe) {
-    case "7d":
-      from.setDate(from.getDate() - 7);
-      break;
-    case "90d":
-      from.setDate(from.getDate() - 90);
-      break;
-    case "1y":
-      from.setDate(from.getDate() - 365);
-      break;
-    case "30d":
-    default:
-      from.setDate(from.getDate() - 30);
-      break;
-  }
-
-  return { from, to };
 }
 
 /**
