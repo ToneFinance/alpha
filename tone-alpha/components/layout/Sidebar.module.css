@@ -107,9 +107,9 @@
 .mobileMenuButton {
   display: none;
   position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 101;
+  top: 12px;
+  left: 12px;
+  z-index: 100;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
@@ -140,6 +140,14 @@
 
   .sidebar.open {
     transform: translateX(0);
+    background: white;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar.open {
+      transform: translateX(0);
+      background: black;
+    }
   }
 
   .mobileMenuButton {
