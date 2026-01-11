@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { createChart, AreaSeries } from "lightweight-charts";
+import { createChart, AreaSeries, ColorType } from "lightweight-charts";
 import type {
   AreaData,
   Time,
   IChartApi,
+  DeepPartial,
+  ChartOptions,
+  AreaSeriesPartialOptions,
 } from "lightweight-charts";
 import { SectorConfig } from "@/lib/sectors";
 import { getDateRange } from "@/lib/time";
+import { useTheme } from "@/lib/theme";
 
 interface ChartDataPoint {
   timestamp: number;
@@ -21,6 +25,62 @@ interface LightweightChartProps {
   containerRef?: React.RefObject<HTMLDivElement>;
   timeframe: "7d" | "30d" | "90d" | "1y";
 }
+
+const lightTheme: {
+  chart: DeepPartial<ChartOptions>;
+  series: DeepPartial<AreaSeriesPartialOptions>;
+} = {
+  chart: {
+    layout: {
+      background: { type: ColorType.Solid, color: "#ffffff" },
+      textColor: "#191919",
+    },
+    grid: {
+      vertLines: { visible: false },
+      horzLines: { color: "#f0f3fa" },
+    },
+    rightPriceScale: {
+      borderVisible: false,
+    },
+    timeScale: {
+      borderVisible: false,
+    },
+  },
+  series: {
+    topColor: "rgba(102, 126, 234, 0.4)",
+    bottomColor: "rgba(102, 126, 234, 0.02)",
+    lineColor: "rgba(102, 126, 234, 1)",
+    lineWidth: 2,
+  },
+};
+
+const darkTheme: {
+  chart: DeepPartial<ChartOptions>;
+  series: DeepPartial<AreaSeriesPartialOptions>;
+} = {
+  chart: {
+    layout: {
+      background: { type: ColorType.Solid, color: "#0a0a0a" },
+      textColor: "#D9D9D9",
+    },
+    grid: {
+      vertLines: { color: "rgba(255, 255, 255, 0.05)" },
+      horzLines: { color: "rgba(255, 255, 255, 0.05)" },
+    },
+    rightPriceScale: {
+      borderVisible: false,
+    },
+    timeScale: {
+      borderVisible: false,
+    },
+  },
+  series: {
+    topColor: "rgba(102, 126, 234, 0.4)",
+    bottomColor: "rgba(102, 126, 234, 0.02)",
+    lineColor: "rgba(102, 126, 234, 1)",
+    lineWidth: 2,
+  },
+};
 
 function _applyTimeFrame(chart: IChartApi, timeframe: string) {
   const { from, to } = getDateRange(timeframe);
@@ -38,16 +98,21 @@ export function LightweightChart({
 }: LightweightChartProps) {
   const internalRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     const container = containerRef?.current || internalRef.current;
     if (!container || data.length === 0) return;
 
     try {
-      // Initialize chart with minimal options
+      // Get theme options
+      const themeOptions = resolvedTheme === "dark" ? darkTheme : lightTheme;
+
+      // Initialize chart with theme
       const chart = createChart(container, {
         width: container.clientWidth,
         height: container.clientHeight,
+        ...themeOptions.chart,
       });
 
       // Transform data for lightweight-charts (use Unix timestamp in seconds)
@@ -68,8 +133,8 @@ export function LightweightChart({
         return;
       }
 
-      // Add series - try without any options first
-      const series = chart.addSeries(AreaSeries);
+      // Add series with theme options
+      const series = chart.addSeries(AreaSeries, themeOptions.series);
 
       series.setData(chartData);
       series.priceScale().setAutoScale(true);
@@ -98,7 +163,7 @@ export function LightweightChart({
     } catch (error) {
       console.error("Error creating chart:", error);
     }
-  }, [data, sector.color, chartRef, containerRef]);
+  }, [data, sector.color, resolvedTheme, containerRef]);
 
   useEffect(() => {
     if (!chartRef.current) return;
