@@ -96,16 +96,6 @@
   transform: translate(2px, -2px);
 }
 
-@media (prefers-color-scheme: dark) {
-  .homepageLink {
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-  }
-
-  .homepageLink:hover {
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.5);
-  }
-}
-
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .navbar {

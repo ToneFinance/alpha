@@ -1,0 +1,44 @@
+.themeToggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+}
+
+.themeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.themeButton:hover {
+  background: var(--card-bg);
+  color: var(--foreground);
+}
+
+.themeButton.active {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+@media (max-width: 768px) {
+  .themeToggle {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .themeButton {
+    width: 32px;
+    height: 32px;
+  }
+}

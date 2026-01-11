@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { LayoutDashboard, Layers, BookOpen, X, Menu } from "lucide-react";
+import { ThemeToggle } from "../ThemeToggle";
 import styles from "./Sidebar.module.css";
 
 export function Sidebar() {
@@ -60,6 +61,7 @@ export function Sidebar() {
 
         {/* Footer Links */}
         <div className={styles.sidebarFooter}>
+          <ThemeToggle />
           <div className={styles.footerLinks}>
             <a
               href="https://tone.finance"
