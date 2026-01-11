@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { SectorConfig } from "@/lib/sectors";
 import { LightweightChart } from "./LightweightChart";
+import { getDateRange } from "@/lib/time";
 import styles from "./ToneChart.module.css";
 
 interface ChartDataPoint {
@@ -89,9 +90,13 @@ export function ToneChart({ sector }: ToneChartProps) {
     );
   }
 
-  // Format price display
-  const currentPrice = data[data.length - 1].price;
-  const previousPrice = data[0].price;
+  // Format price display - filter data based on selected timeframe
+  const { from } = getDateRange(selectedTimeframe);
+  const cutoffTime = from.getTime();
+  const filteredData = data.filter(d => d.timestamp >= cutoffTime);
+
+  const currentPrice = filteredData[filteredData.length - 1].price;
+  const previousPrice = filteredData[0].price;
   const priceChange = currentPrice - previousPrice;
   const percentChange = ((priceChange / previousPrice) * 100).toFixed(2);
 
