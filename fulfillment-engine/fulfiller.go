@@ -393,30 +393,29 @@ func (f *Fulfiller) FulfillWithdrawal(ctx context.Context, withdrawalId *big.Int
 	}
 
 	// For each underlying token, calculate the amount based on weight and prices
+	totalProvidedValue := big.NewInt(0)
+
 	for i, weight := range f.underlyingWeights {
 		token := f.underlyingTokens[i]
 		tokenDec := f.tokenDecimals[token]
 
-		// Step 1: Calculate value allocation (in quote token decimals / USDC decimals)
+		// Step 1: Calculate value allocation (in USDC decimals)
 		valueAllocation := new(big.Int).Div(new(big.Int).Mul(expectedUSDC, weight), totalWeight)
 
-		// Step 2: Oracle returns values in USDC decimals (6), same as quote token
-		// No need for normalization - oracle.getValue() returns USDC amounts directly
-		// The value is already in the correct denomination
-
-		// Step 3: Calculate token amount needed to provide the value allocation
+		// Step 2: Calculate token amount needed to provide the value allocation
 		// oracle.getValue(token, amount) = (amount * price) / 10^tokenDecimals
 		// We want: oracle.getValue(token, amount) >= valueAllocation
 		// So: amount >= (valueAllocation * 10^tokenDecimals) / price
-		// Use ceiling division to ensure we provide enough value
+		// Use floor division for initial amounts
 		tokenDecMultiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(tokenDec)), nil)
 		numerator := new(big.Int).Mul(valueAllocation, tokenDecMultiplier)
-		// Ceiling division: (a + b - 1) / b
-		amount := new(big.Int).Div(
-			new(big.Int).Add(numerator, new(big.Int).Sub(tokenPrices[i], big.NewInt(1))),
-			tokenPrices[i],
-		)
+		// Floor division
+		amount := new(big.Int).Div(numerator, tokenPrices[i])
 		underlyingAmounts[i] = amount
+
+		// Calculate actual value this amount provides
+		actualValue := new(big.Int).Div(new(big.Int).Mul(amount, tokenPrices[i]), tokenDecMultiplier)
+		totalProvidedValue = new(big.Int).Add(totalProvidedValue, actualValue)
 
 		Logger.Debug("Calculated underlying token amount for withdrawal",
 			"withdrawal_id", withdrawalId.String(),
@@ -427,6 +426,80 @@ func (f *Fulfiller) FulfillWithdrawal(ctx context.Context, withdrawalId *big.Int
 			"price", tokenPrices[i].String(),
 			"value_allocation", valueAllocation.String(),
 			"amount", amount.String(),
+			"actual_value", actualValue.String(),
+		)
+	}
+
+	// Check if we need to add more value to meet the tolerance
+	// The contract checks: difference <= (expectedUSDC / 1000) + 1
+	tolerance := new(big.Int).Div(expectedUSDC, big.NewInt(1000))
+	tolerance = new(big.Int).Add(tolerance, big.NewInt(1))
+
+	var difference *big.Int
+	if totalProvidedValue.Cmp(expectedUSDC) >= 0 {
+		difference = new(big.Int).Sub(totalProvidedValue, expectedUSDC)
+	} else {
+		difference = new(big.Int).Sub(expectedUSDC, totalProvidedValue)
+	}
+
+	Logger.Debug("Withdrawal value check",
+		"withdrawal_id", withdrawalId.String(),
+		"expected_usdc", expectedUSDC.String(),
+		"total_provided_value", totalProvidedValue.String(),
+		"difference", difference.String(),
+		"tolerance", tolerance.String(),
+	)
+
+	// If we're providing less than required, increase amounts to meet the target (capped at 0.01 USDC)
+	if totalProvidedValue.Cmp(expectedUSDC) < 0 {
+		// We're under the expected value. Find the token with the largest weight (usually most liquid)
+		maxWeightIdx := 0
+		maxWeight := f.underlyingWeights[0]
+		for i, w := range f.underlyingWeights {
+			if w.Cmp(maxWeight) > 0 {
+				maxWeight = w
+				maxWeightIdx = i
+			}
+		}
+
+		// Calculate how much more value we need, but cap at 0.01 USDC (10000 wei)
+		currentShortfall := new(big.Int).Sub(expectedUSDC, totalProvidedValue)
+		maxIncreaseValue := big.NewInt(10000) // 0.01 USDC in wei (6 decimals)
+
+		if currentShortfall.Cmp(maxIncreaseValue) > 0 {
+			currentShortfall = maxIncreaseValue
+		}
+
+		tokenDecMultiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(f.tokenDecimals[f.underlyingTokens[maxWeightIdx]])), nil)
+		price := tokenPrices[maxWeightIdx]
+
+		// Calculate ceiling((shortfall * 10^tokenDecimals) / price) as the amount to increase
+		increaseNumerator := new(big.Int).Mul(currentShortfall, tokenDecMultiplier)
+		increaseAmount := new(big.Int).Div(
+			new(big.Int).Add(increaseNumerator, new(big.Int).Sub(price, big.NewInt(1))),
+			price,
+		)
+
+		// Always add at least 1 token to ensure value improvement
+		if increaseAmount.Sign() <= 0 {
+			increaseAmount = big.NewInt(1)
+		}
+
+		underlyingAmounts[maxWeightIdx] = new(big.Int).Add(underlyingAmounts[maxWeightIdx], increaseAmount)
+
+		// Recalculate actual value provided after increase
+		newActualValue := new(big.Int).Div(new(big.Int).Mul(increaseAmount, price), tokenDecMultiplier)
+		newTotalValue := new(big.Int).Add(totalProvidedValue, newActualValue)
+
+		Logger.Debug("Increased token amount to meet expected USDC",
+			"withdrawal_id", withdrawalId.String(),
+			"token_index", maxWeightIdx,
+			"token", f.underlyingTokens[maxWeightIdx].Hex(),
+			"shortfall", currentShortfall.String(),
+			"increase_tokens", increaseAmount.String(),
+			"increase_value", newActualValue.String(),
+			"new_total_value", newTotalValue.String(),
+			"target_value", expectedUSDC.String(),
 		)
 	}
 
