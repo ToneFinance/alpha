@@ -70,6 +70,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
     /// @notice Mapping of withdrawal ID to pending withdrawal
     mapping(uint256 => PendingWithdrawal) public pendingWithdrawals;
 
+    /// @notice Mapping of user address to total pending withdrawal shares
+    mapping(address => uint256) public pendingWithdrawalShares;
+
     /// @notice Struct representing a pending rebalance request
     struct RebalanceRequest {
         address[] newUnderlyingTokens;
@@ -333,13 +336,22 @@ contract SectorVault is Ownable, ReentrancyGuard {
     function requestWithdrawal(uint256 sharesAmount) external nonReentrant returns (uint256 withdrawalId) {
         if (rebalanceRequest.pending) revert RebalancePending();
         if (sharesAmount == 0) revert InvalidAmount();
-        if (SECTOR_TOKEN.balanceOf(msg.sender) < sharesAmount) revert InsufficientShares();
+
+        // Check that user has enough shares considering pending withdrawals
+        uint256 userBalance = SECTOR_TOKEN.balanceOf(msg.sender);
+        uint256 pendingShares = pendingWithdrawalShares[msg.sender];
+        uint256 availableShares = userBalance > pendingShares ? userBalance - pendingShares : 0;
+
+        if (availableShares < sharesAmount) revert InsufficientShares();
 
         // Create pending withdrawal (tokens stay with user until fulfillment)
         withdrawalId = nextWithdrawalId++;
         pendingWithdrawals[withdrawalId] = PendingWithdrawal({
             user: msg.sender, sharesAmount: sharesAmount, fulfilled: false, timestamp: block.timestamp
         });
+
+        // Update pending withdrawal shares for this user
+        pendingWithdrawalShares[msg.sender] += sharesAmount;
 
         emit WithdrawalRequested(msg.sender, withdrawalId, sharesAmount, block.timestamp);
     }
@@ -359,7 +371,7 @@ contract SectorVault is Ownable, ReentrancyGuard {
         if (underlyingAmounts.length != underlyingTokens.length) revert InvalidAmount();
 
         // Calculate expected USDC value based on current NAV
-        uint256 expectedUSDC = calculateWithdrawalValue(pendingWithdrawal.sharesAmount);
+        uint256 expectedUsdc = calculateWithdrawalValue(pendingWithdrawal.sharesAmount);
 
         // Get decimal info for validation
         uint8 quoteDecimals = IERC20Metadata(address(QUOTE_TOKEN)).decimals();
@@ -374,18 +386,18 @@ contract SectorVault is Ownable, ReentrancyGuard {
         }
 
         // Normalize expected USDC to oracle decimals for comparison
-        uint256 normalizedExpectedUSDC;
+        uint256 normalizedExpectedUsdc;
         if (quoteDecimals >= oracleDecimals) {
-            normalizedExpectedUSDC = expectedUSDC / (10 ** (quoteDecimals - oracleDecimals));
+            normalizedExpectedUsdc = expectedUsdc / (10 ** (quoteDecimals - oracleDecimals));
         } else {
-            normalizedExpectedUSDC = expectedUSDC * (10 ** (oracleDecimals - quoteDecimals));
+            normalizedExpectedUsdc = expectedUsdc * (10 ** (oracleDecimals - quoteDecimals));
         }
 
         // Verify underlying value matches expected (with 0.1% tolerance)
-        uint256 tolerance = (normalizedExpectedUSDC / 1000) + 1;
-        uint256 difference = totalUnderlyingValue > normalizedExpectedUSDC
-            ? totalUnderlyingValue - normalizedExpectedUSDC
-            : normalizedExpectedUSDC - totalUnderlyingValue;
+        uint256 tolerance = (normalizedExpectedUsdc / 1000) + 1;
+        uint256 difference = totalUnderlyingValue > normalizedExpectedUsdc
+            ? totalUnderlyingValue - normalizedExpectedUsdc
+            : normalizedExpectedUsdc - totalUnderlyingValue;
 
         if (difference > tolerance) revert FulfillmentUSDCMismatch();
 
@@ -406,9 +418,12 @@ contract SectorVault is Ownable, ReentrancyGuard {
         SECTOR_TOKEN.burn(user, sharesAmount);
 
         // Transfer USDC FROM fulfiller TO user
-        QUOTE_TOKEN.safeTransferFrom(msg.sender, user, expectedUSDC);
+        QUOTE_TOKEN.safeTransferFrom(msg.sender, user, expectedUsdc);
 
-        emit WithdrawalFulfilled(user, withdrawalId, expectedUSDC, block.timestamp);
+        // Decrease pending withdrawal shares for this user
+        pendingWithdrawalShares[user] -= sharesAmount;
+
+        emit WithdrawalFulfilled(user, withdrawalId, expectedUsdc, block.timestamp);
 
         // Clean up: delete the withdrawal to save storage
         delete pendingWithdrawals[withdrawalId];
@@ -435,6 +450,9 @@ contract SectorVault is Ownable, ReentrancyGuard {
 
         // Mark as fulfilled to prevent re-entrancy
         pendingWithdrawal.fulfilled = true;
+
+        // Decrease pending withdrawal shares for this user
+        pendingWithdrawalShares[user] -= sharesAmount;
 
         emit WithdrawalCancelled(user, withdrawalId, sharesAmount);
 

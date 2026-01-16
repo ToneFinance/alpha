@@ -291,29 +291,29 @@ contract SectorVaultWithdrawalTest is Test {
         uint256 withdrawalId = vault.requestWithdrawal(shares);
 
         // Calculate expected USDC (in USDC decimals = 18)
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(shares);
-        assertEq(expectedUSDC, 1000 * 10 ** 18, "Expected USDC should be $1000");
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares);
+        assertEq(expectedUsdc, 1000 * 10 ** 18, "Expected USDC should be $1000");
 
         // Get vault balances before
         (address[] memory tokens, uint256[] memory balancesBefore) = vault.getVaultBalances();
-        uint256 user1USDCBefore = usdc.balanceOf(user1);
+        uint256 user1UsdcBefore = usdc.balanceOf(user1);
         uint256 totalSupplyBefore = sectorToken.totalSupply();
 
         // Fulfiller fulfills
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
 
         // Expect event
         vm.expectEmit(true, true, false, true);
-        emit WithdrawalFulfilled(user1, withdrawalId, expectedUSDC, block.timestamp);
+        emit WithdrawalFulfilled(user1, withdrawalId, expectedUsdc, block.timestamp);
 
         vault.fulfillWithdrawal(withdrawalId, balancesBefore);
         vm.stopPrank();
 
         // Assertions
         // 1. User received USDC
-        uint256 user1USDCAfter = usdc.balanceOf(user1);
-        assertEq(user1USDCAfter - user1USDCBefore, expectedUSDC, "User should receive USDC");
+        uint256 user1UsdcAfter = usdc.balanceOf(user1);
+        assertEq(user1UsdcAfter - user1UsdcBefore, expectedUsdc, "User should receive USDC");
 
         // 2. Shares were burned
         assertEq(sectorToken.totalSupply(), totalSupplyBefore - shares, "Shares should be burned");
@@ -348,8 +348,8 @@ contract SectorVaultWithdrawalTest is Test {
         uint256 withdrawalId = vault.requestWithdrawal(withdrawAmount);
 
         // Expected USDC = $1000 (50% of $2000) (in USDC decimals = 18)
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(withdrawAmount);
-        assertEq(expectedUSDC, 1000 * 10 ** 18, "Expected $1000");
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(withdrawAmount);
+        assertEq(expectedUsdc, 1000 * 10 ** 18, "Expected $1000");
 
         // Get proportional token amounts
         (, uint256[] memory vaultBalances) = vault.getVaultBalances();
@@ -361,7 +361,7 @@ contract SectorVaultWithdrawalTest is Test {
 
         // Fulfill
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
         vault.fulfillWithdrawal(withdrawalId, underlyingAmounts);
         vm.stopPrank();
 
@@ -389,20 +389,20 @@ contract SectorVaultWithdrawalTest is Test {
         uint256 withdrawalId = vault.requestWithdrawal(shares);
 
         // Expected USDC should be $2000 (doubled NAV) (in USDC decimals = 18)
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(shares);
-        assertEq(expectedUSDC, 2000 * 10 ** 18, "Expected $2000 due to price increase");
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares);
+        assertEq(expectedUsdc, 2000 * 10 ** 18, "Expected $2000 due to price increase");
 
         // Fulfill
         (, uint256[] memory underlyingAmounts) = vault.getVaultBalances();
 
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
         vault.fulfillWithdrawal(withdrawalId, underlyingAmounts);
         vm.stopPrank();
 
         // User should receive $2000
         assertGt(usdc.balanceOf(user1), depositAmount, "User should profit from price increase");
-        assertEq(usdc.balanceOf(user1), 10_000 * 10 ** 18 - depositAmount + expectedUSDC, "Exact USDC calculation");
+        assertEq(usdc.balanceOf(user1), 10_000 * 10 ** 18 - depositAmount + expectedUsdc, "Exact USDC calculation");
     }
 
     // ============================================
@@ -442,11 +442,11 @@ contract SectorVaultWithdrawalTest is Test {
         uint256 withdrawalId = vault.requestWithdrawal(shares);
 
         (, uint256[] memory underlyingAmounts) = vault.getVaultBalances();
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(shares);
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares);
 
         // Fulfill once
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
         vault.fulfillWithdrawal(withdrawalId, underlyingAmounts);
 
         // Try to fulfill again
@@ -469,10 +469,10 @@ contract SectorVaultWithdrawalTest is Test {
         wrongAmounts[1] = correctAmounts[1] / 2; // Only 50% of token2
         wrongAmounts[2] = correctAmounts[2] / 2; // Only 50% of token3
 
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(shares);
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares);
 
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
         vm.expectRevert(SectorVault.FulfillmentUSDCMismatch.selector);
         vault.fulfillWithdrawal(withdrawalId, wrongAmounts); // Wrong underlying amounts
         vm.stopPrank();
@@ -570,26 +570,26 @@ contract SectorVaultWithdrawalTest is Test {
         uint256 depositAmount = 5000 * 10 ** 18;
         uint256 shares = _setupUserPosition(user1, depositAmount);
 
-        uint256 initialUSDC = usdc.balanceOf(user1);
+        uint256 initialUsdc = usdc.balanceOf(user1);
 
         // Request withdrawal
         vm.prank(user1);
         uint256 withdrawalId = vault.requestWithdrawal(shares);
 
         // Calculate expected
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(shares);
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares);
         (, uint256[] memory underlyingAmounts) = vault.getVaultBalances();
 
         // Fulfill
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
         vault.fulfillWithdrawal(withdrawalId, underlyingAmounts);
         vm.stopPrank();
 
         // Final state
         assertEq(sectorToken.balanceOf(user1), 0, "User should have 0 shares");
         assertEq(sectorToken.totalSupply(), 0, "Total supply should be 0");
-        assertEq(usdc.balanceOf(user1), initialUSDC + expectedUSDC, "User got USDC back");
+        assertEq(usdc.balanceOf(user1), initialUsdc + expectedUsdc, "User got USDC back");
         assertEq(vault.getTotalValue(), 0, "Vault NAV should be 0");
     }
 
@@ -614,19 +614,19 @@ contract SectorVaultWithdrawalTest is Test {
             amounts1[i] = (vaultBalances[i] * shares1) / totalShares;
         }
 
-        uint256 expectedUSDC1 = vault.calculateWithdrawalValue(shares1);
+        uint256 expectedUsdc1 = vault.calculateWithdrawalValue(shares1);
 
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC1);
+        usdc.approve(address(vault), expectedUsdc1);
         vault.fulfillWithdrawal(withdrawal1, amounts1);
         vm.stopPrank();
 
         // Fulfill user2
         (, vaultBalances) = vault.getVaultBalances();
-        uint256 expectedUSDC2 = vault.calculateWithdrawalValue(shares2);
+        uint256 expectedUsdc2 = vault.calculateWithdrawalValue(shares2);
 
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC2);
+        usdc.approve(address(vault), expectedUsdc2);
         vault.fulfillWithdrawal(withdrawal2, vaultBalances);
         vm.stopPrank();
 
@@ -659,20 +659,20 @@ contract SectorVaultWithdrawalTest is Test {
         uint256 withdrawalId = vault.requestWithdrawal(shares);
 
         // Calculate expected USDC (should be ~906.52)
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(shares);
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares);
         (, uint256[] memory underlyingAmounts) = vault.getVaultBalances();
 
         // Fulfill
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
         vault.fulfillWithdrawal(withdrawalId, underlyingAmounts);
         vm.stopPrank();
 
         // User should receive the changed NAV value
-        uint256 userUSDC = usdc.balanceOf(user1);
+        uint256 userUsdc = usdc.balanceOf(user1);
         // Started with 10k, deposited 1k, so had 9k left
         // Now receives ~906.52, so should have ~9906.52
-        assertApproxEqAbs(userUSDC, 9906_520_000_000_000_000_000, 100 * 10 ** 18, "User should get changed value");
+        assertApproxEqAbs(userUsdc, 9906_520_000_000_000_000_000, 100 * 10 ** 18, "User should get changed value");
     }
 
     function test_withdrawalCleanup() public {
@@ -686,11 +686,11 @@ contract SectorVaultWithdrawalTest is Test {
         assertEq(user, user1, "Withdrawal should exist");
 
         // Fulfill
-        uint256 expectedUSDC = vault.calculateWithdrawalValue(shares);
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares);
         (, uint256[] memory amounts) = vault.getVaultBalances();
 
         vm.startPrank(fulfiller);
-        usdc.approve(address(vault), expectedUSDC);
+        usdc.approve(address(vault), expectedUsdc);
         vault.fulfillWithdrawal(withdrawalId, amounts);
         vm.stopPrank();
 
@@ -703,5 +703,204 @@ contract SectorVaultWithdrawalTest is Test {
         vm.prank(user1);
         uint256 newWithdrawalId = vault.requestWithdrawal(shares);
         assertEq(newWithdrawalId, withdrawalId + 1, "IDs should increment monotonically");
+    }
+
+    // ============================================
+    // Test: Pending Withdrawal Shares Security
+    // ============================================
+
+    function test_pendingWithdrawalShares_SingleRequest() public {
+        uint256 depositAmount = 1000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        assertEq(vault.pendingWithdrawalShares(user1), 0, "No pending shares initially");
+
+        vm.prank(user1);
+        vault.requestWithdrawal(shares / 2);
+
+        assertEq(vault.pendingWithdrawalShares(user1), shares / 2, "Should track pending shares");
+    }
+
+    function test_pendingWithdrawalShares_MultiplePendingRequests() public {
+        uint256 depositAmount = 3000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.startPrank(user1);
+        vault.requestWithdrawal(shares / 3);
+        assertEq(vault.pendingWithdrawalShares(user1), shares / 3, "First request tracked");
+
+        vault.requestWithdrawal(shares / 3);
+        assertEq(vault.pendingWithdrawalShares(user1), (shares * 2) / 3, "Second request accumulated");
+        vm.stopPrank();
+    }
+
+    function test_pendingWithdrawalShares_DecrementOnFulfill() public {
+        uint256 depositAmount = 2000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.prank(user1);
+        uint256 withdrawalId = vault.requestWithdrawal(shares / 2);
+
+        assertEq(vault.pendingWithdrawalShares(user1), shares / 2, "Pending shares tracked");
+
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares / 2);
+        uint256 totalShares = sectorToken.totalSupply();
+        (, uint256[] memory vaultBalances) = vault.getVaultBalances();
+
+        uint256[] memory amounts = new uint256[](3);
+        for (uint256 i = 0; i < 3; i++) {
+            amounts[i] = (vaultBalances[i] * (shares / 2)) / totalShares;
+        }
+
+        vm.startPrank(fulfiller);
+        usdc.approve(address(vault), expectedUsdc);
+        vault.fulfillWithdrawal(withdrawalId, amounts);
+        vm.stopPrank();
+
+        assertEq(vault.pendingWithdrawalShares(user1), 0, "Pending shares should be cleared after fulfill");
+    }
+
+    function test_pendingWithdrawalShares_DecrementOnCancel() public {
+        uint256 depositAmount = 1000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.prank(user1);
+        uint256 withdrawalId = vault.requestWithdrawal(shares);
+
+        assertEq(vault.pendingWithdrawalShares(user1), shares, "Pending shares tracked");
+
+        vm.prank(user1);
+        vault.cancelWithdrawal(withdrawalId);
+
+        assertEq(vault.pendingWithdrawalShares(user1), 0, "Pending shares should be cleared after cancel");
+    }
+
+    function test_requestWithdrawal_RevertDoubleSpendVulnerability() public {
+        uint256 depositAmount = 1000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.startPrank(user1);
+        uint256 withdrawalId1 = vault.requestWithdrawal(shares * 8 / 10);
+        assertEq(withdrawalId1, 0, "First withdrawal request successful");
+
+        vm.expectRevert(SectorVault.InsufficientShares.selector);
+        vault.requestWithdrawal(shares * 8 / 10);
+        vm.stopPrank();
+    }
+
+    function test_requestWithdrawal_PreventExcessiveWithdrawalRequests() public {
+        uint256 depositAmount = 3000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.startPrank(user1);
+        vault.requestWithdrawal(shares / 3);
+        vault.requestWithdrawal(shares / 3);
+        vault.requestWithdrawal(shares / 3);
+
+        vm.expectRevert(SectorVault.InsufficientShares.selector);
+        vault.requestWithdrawal(1);
+        vm.stopPrank();
+    }
+
+    function test_requestWithdrawal_AvailableSharesCalculation() public {
+        uint256 depositAmount = 2000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.startPrank(user1);
+        vault.requestWithdrawal(shares * 6 / 10);
+
+        uint256 availableShares = shares - vault.pendingWithdrawalShares(user1);
+        assertEq(availableShares, shares * 4 / 10, "Available shares should be balance minus pending");
+
+        vault.requestWithdrawal(shares * 4 / 10);
+
+        availableShares = shares - vault.pendingWithdrawalShares(user1);
+        assertEq(availableShares, 0, "No available shares left");
+        vm.stopPrank();
+    }
+
+    function test_multipleWithdrawals_FulfillAndRequestAgain() public {
+        uint256 depositAmount = 3000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.prank(user1);
+        uint256 withdrawalId1 = vault.requestWithdrawal(shares / 3);
+
+        assertEq(vault.pendingWithdrawalShares(user1), shares / 3, "First request pending");
+
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares / 3);
+        uint256 totalShares = sectorToken.totalSupply();
+        (, uint256[] memory vaultBalances) = vault.getVaultBalances();
+
+        uint256[] memory amounts = new uint256[](3);
+        for (uint256 i = 0; i < 3; i++) {
+            amounts[i] = (vaultBalances[i] * (shares / 3)) / totalShares;
+        }
+
+        vm.startPrank(fulfiller);
+        usdc.approve(address(vault), expectedUsdc);
+        vault.fulfillWithdrawal(withdrawalId1, amounts);
+        vm.stopPrank();
+
+        assertEq(vault.pendingWithdrawalShares(user1), 0, "Pending cleared after fulfill");
+
+        uint256 remainingShares = sectorToken.balanceOf(user1);
+        assertEq(remainingShares, (shares * 2) / 3, "User has 2/3 shares remaining");
+
+        vm.prank(user1);
+        uint256 withdrawalId2 = vault.requestWithdrawal(remainingShares);
+
+        assertEq(vault.pendingWithdrawalShares(user1), remainingShares, "New request tracked correctly");
+    }
+
+    function test_multiplePendingWithdrawals_PartialFulfillment() public {
+        uint256 depositAmount = 3000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.startPrank(user1);
+        uint256 withdrawalId1 = vault.requestWithdrawal(shares / 3);
+        uint256 withdrawalId2 = vault.requestWithdrawal(shares / 3);
+        uint256 withdrawalId3 = vault.requestWithdrawal(shares / 3);
+        vm.stopPrank();
+
+        assertEq(vault.pendingWithdrawalShares(user1), shares, "All shares pending");
+
+        uint256 expectedUsdc = vault.calculateWithdrawalValue(shares / 3);
+        uint256 totalShares = sectorToken.totalSupply();
+        (, uint256[] memory vaultBalances) = vault.getVaultBalances();
+
+        uint256[] memory amounts = new uint256[](3);
+        for (uint256 i = 0; i < 3; i++) {
+            amounts[i] = (vaultBalances[i] * (shares / 3)) / totalShares;
+        }
+
+        vm.startPrank(fulfiller);
+        usdc.approve(address(vault), expectedUsdc);
+        vault.fulfillWithdrawal(withdrawalId2, amounts);
+        vm.stopPrank();
+
+        assertEq(vault.pendingWithdrawalShares(user1), (shares * 2) / 3, "One withdrawal fulfilled, 2/3 still pending");
+    }
+
+    function test_cancelWithdrawal_MultiplePending() public {
+        uint256 depositAmount = 3000 * 10 ** 18;
+        uint256 shares = _setupUserPosition(user1, depositAmount);
+
+        vm.startPrank(user1);
+        uint256 withdrawalId1 = vault.requestWithdrawal(shares / 3);
+        uint256 withdrawalId2 = vault.requestWithdrawal(shares / 3);
+        vm.stopPrank();
+
+        assertEq(vault.pendingWithdrawalShares(user1), (shares * 2) / 3, "2/3 shares pending");
+
+        vm.prank(user1);
+        vault.cancelWithdrawal(withdrawalId1);
+
+        assertEq(vault.pendingWithdrawalShares(user1), shares / 3, "Only 1/3 pending after cancel");
+
+        vm.prank(user1);
+        vault.cancelWithdrawal(withdrawalId2);
+
+        assertEq(vault.pendingWithdrawalShares(user1), 0, "No pending shares after both cancelled");
     }
 }
