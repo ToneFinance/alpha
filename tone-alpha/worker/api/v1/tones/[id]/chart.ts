@@ -178,7 +178,7 @@ async function fetchFindexData(
 
   const request: SimulateFundRequest = {
     quote: "USD",
-    from: from.toISOString(),
+    from: "2024-01-01T00:00:00Z",
     to: to.toISOString(),
     fund_ref: {
       fund_id: fundId,
