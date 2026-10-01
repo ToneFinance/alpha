@@ -93,6 +93,24 @@ const SECTORS: Record<string, SectorConfig> = {
     symbol: "tUSA",
     fundId: "01KD0FNAM0WE7C80TDFRMEQ0BX",
   },
+  rwa: {
+    id: "rwa",
+    name: "RWA",
+    symbol: "tRWA",
+    fundId: "01KD0FHT61EDQ1MM536X4XWCXN",
+  },
+  privacy: {
+    id: "privacy",
+    name: "Privacy",
+    symbol: "tPRV",
+    fundId: "01M3S8DA23VMF97XDRAHVX5RQ6",
+  },
+  payment: {
+    id: "payment",
+    name: "Payment ISO 20022",
+    symbol: "tISO",
+    fundId: "01M3S8RJMJ24KJXFZYKK25D9P4",
+  },
 };
 
 // ============================================================================
