@@ -41,6 +41,56 @@ curl https://alpha.lab.tone.finance/api/v1/tones/usa/chart?timeframe=7d
 }
 ```
 
+### GET `/api/v1/tones/:id/composition`
+
+Fetches the current holdings of a specific Tone (sector token) via Findex `GetFundComposition`.
+
+**Parameters:**
+- `id` (path parameter): The sector identifier (e.g. `ai`, `usa`)
+- `as_of` (query parameter, optional): Date to report the composition for, as `YYYY-MM-DD`. Defaults to yesterday (UTC), the latest day with complete prices.
+
+**Example Requests:**
+```bash
+curl https://alpha.lab.tone.finance/api/v1/tones/ai/composition
+curl https://alpha.lab.tone.finance/api/v1/tones/ai/composition?as_of=2026-09-30
+```
+
+**Response Format:**
+```json
+{
+  "id": "ai",
+  "name": "AI Sector",
+  "symbol": "tAI",
+  "asOf": "2026-10-06",
+  "lastRebalance": "2026-09-01",
+  "positions": [
+    {
+      "symbol": "BTC",
+      "weight": 0.42,
+      "providerId": "COINGECKO",
+      "providerSymbol": "bitcoin",
+      "assets": [
+        { "chain": "eip155:1", "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "decimals": 8, "kind": "wrapped", "relevanceRank": 1 }
+      ]
+    },
+    {
+      "symbol": "ETH",
+      "weight": 0.31,
+      "providerId": "COINGECKO",
+      "providerSymbol": "ethereum",
+      "assets": [
+        { "chain": "eip155:1", "address": null, "decimals": 18, "kind": "canonical", "relevanceRank": 0 },
+        { "chain": "eip155:1", "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "decimals": 18, "kind": "wrapped", "relevanceRank": 1 }
+      ]
+    }
+  ]
+}
+```
+
+Positions are ordered by weight (largest first) and weights sum to 1. `providerId` is the price data provider for the symbol (e.g. `COINGECKO`, `COINCODEX`) and `providerSymbol` identifies the asset at that provider; both are `null` if unknown.
+
+`assets` lists the tradable versions of the symbol, most relevant first (lowest `relevanceRank`), and is empty if unknown. `chain` is a CAIP-2 chain ID (e.g. `eip155:1`), `address` is the token contract (`null` for the chain's native coin), and `kind` is one of `canonical`, `bridged`, `wrapped`, or `null` if unspecified.
+
 ## Configuration
 
 ### Environment Variables / Secrets

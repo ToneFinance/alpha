@@ -4,6 +4,7 @@
  */
 
 import { onRequestGet as handleChartGet, onRequestOptions as handleChartOptions } from './api/v1/tones/[id]/chart';
+import { onRequestGet as handleCompositionGet, onRequestOptions as handleCompositionOptions } from './api/v1/tones/[id]/composition';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -32,6 +33,30 @@ export default {
       }
 
       // Method not allowed
+      return new Response('Method Not Allowed', {
+        status: 405,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
+    // Handle API routes for fund composition
+    // Pattern: /api/v1/tones/:id/composition
+    const compositionMatch = url.pathname.match(/^\/api\/v1\/tones\/([^/]+)\/composition$/);
+
+    if (compositionMatch) {
+      const context = {
+        request,
+        params: { id: compositionMatch[1] },
+        env,
+        waitUntil: ctx.waitUntil.bind(ctx),
+      };
+
+      if (request.method === 'GET') {
+        return handleCompositionGet(context);
+      } else if (request.method === 'OPTIONS') {
+        return handleCompositionOptions();
+      }
+
       return new Response('Method Not Allowed', {
         status: 405,
         headers: { 'Content-Type': 'text/plain' },
