@@ -48,6 +48,7 @@ interface ChartResponse {
   id: string;
   name: string;
   symbol: string;
+  fundId: string; // Findex fund ULID
   data: ChartDataPoint[];
   timeframe: string;
   lastUpdated: string;
@@ -148,6 +149,7 @@ export const onRequestGet = async (context: PagesContext) => {
       id: sector.id,
       name: sector.name,
       symbol: sector.symbol,
+      fundId: sector.fundId,
       data: chartData,
       timeframe,
       lastUpdated: new Date().toISOString(),

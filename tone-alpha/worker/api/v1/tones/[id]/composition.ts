@@ -94,6 +94,7 @@ interface CompositionResponse {
   id: string;
   name: string;
   symbol: string;
+  fundId: string; // Findex fund ULID
   asOf: string | null; // YYYY-MM-DD
   lastRebalance: string | null; // YYYY-MM-DD
   positions: Position[]; // Ordered by weight, largest first
@@ -255,6 +256,7 @@ export const onRequestGet = async (context: PagesContext) => {
       id: sector.id,
       name: sector.name,
       symbol: sector.symbol,
+      fundId: sector.fundId,
       asOf: fromProtoDate(composition.asOf ?? composition.as_of),
       lastRebalance: fromProtoDate(
         composition.lastRebalance ?? composition.last_rebalance

@@ -15,6 +15,7 @@ interface ChartResponse {
   id: string;
   name: string;
   symbol: string;
+  fundId: string; // Findex fund ULID
   data: ChartDataPoint[];
   timeframe: string;
   lastUpdated: string;

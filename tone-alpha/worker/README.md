@@ -30,6 +30,7 @@ curl https://alpha.lab.tone.finance/api/v1/tones/usa/chart?timeframe=7d
   "id": "ai",
   "name": "AI Sector",
   "symbol": "tAI",
+  "fundId": "01KD0FM283Q99445PG1438K59P",
   "data": [
     {
       "timestamp": 1734784800000,
@@ -61,6 +62,7 @@ curl https://alpha.lab.tone.finance/api/v1/tones/ai/composition?as_of=2026-09-30
   "id": "ai",
   "name": "AI Sector",
   "symbol": "tAI",
+  "fundId": "01KD0FM283Q99445PG1438K59P",
   "asOf": "2026-10-06",
   "lastRebalance": "2026-09-01",
   "positions": [
@@ -86,6 +88,8 @@ curl https://alpha.lab.tone.finance/api/v1/tones/ai/composition?as_of=2026-09-30
   ]
 }
 ```
+
+`fundId` is the Findex fund ULID backing the Tone (also returned by the chart endpoint).
 
 Positions are ordered by weight (largest first) and weights sum to 1. `providerId` is the price data provider for the symbol (e.g. `COINGECKO`, `COINCODEX`) and `providerSymbol` identifies the asset at that provider; both are `null` if unknown.
 
