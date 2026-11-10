@@ -95,6 +95,78 @@ Positions are ordered by weight (largest first) and weights sum to 1. `providerI
 
 `assets` lists the tradable versions of the symbol, most relevant first (lowest `relevanceRank`), and is empty if unknown. `chain` is a CAIP-2 chain ID (e.g. `eip155:1`), `address` is the token contract (`null` for the chain's native coin), and `kind` is one of `canonical`, `bridged`, `wrapped`, or `null` if unspecified.
 
+### POST `/api/v1/transactions`
+
+Reports on-chain Tone purchases via Findex `ReportWalletTransactions` and returns their current status. Only transaction hashes are reported; buyer, funds and transfers are read from the chain once the transaction's block is finalized.
+
+Idempotent: reporting the same hashes again is safe and returns their current status. Transactions that are not fund purchases (reverted, without an ERC-8021 attribution code, or not mined within 24 hours) are discarded and drop out of the response; they can be reported again.
+
+**Body:**
+- `chain`: CAIP-2 chain ID, `eip155:1` (Ethereum) or `eip155:8453` (Base)
+- `txHashes`: 1–50 hashes, each `0x` followed by 64 hex digits
+
+**Example Request:**
+```bash
+curl -X POST https://alpha.lab.tone.finance/api/v1/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{"chain": "eip155:8453", "txHashes": ["0x5f2c…"]}'
+```
+
+**Response Format:**
+```json
+{
+  "transactions": [
+    {
+      "chain": "eip155:8453",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "txHash": "0x5f2c…",
+      "status": "confirmed",
+      "fundIds": ["01KD0FM283Q99445PG1438K59P"],
+      "toneIds": ["ai"],
+      "blockNumber": 21234567,
+      "blockTime": "2026-11-10T09:12:31Z",
+      "reportedAt": "2026-11-10T09:12:35Z",
+      "transfers": [
+        { "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "direction": "out", "amount": "100000000", "counterparty": "0x…" }
+      ]
+    }
+  ]
+}
+```
+
+Transactions are in request order. A pending hash appears once with `status: "pending"` and `wallet`/`blockTime` set to `null`. A confirmed hash appears once per buyer: an ERC-4337 bundle can hold purchases by several smart accounts.
+
+### GET `/api/v1/wallets/:address/transactions`
+
+Lists the confirmed Tone purchases of a wallet, newest first, via Findex `ListWalletTransactions`. Pending transactions are not listed, as their buyer is only known once they are confirmed.
+
+**Parameters:**
+- `address` (path parameter): EVM address (`0x` followed by 40 hex digits)
+- `chain` (query parameter, optional): `eip155:1` or `eip155:8453`. Omit to list all supported chains.
+- `page_size` (query parameter, optional): 0–1000, defaults to 100
+- `page_token` (query parameter, optional): `nextPageToken` of the previous response. Keeps the `chain` and `page_size` of the first request.
+
+**Example Requests:**
+```bash
+curl https://alpha.lab.tone.finance/api/v1/wallets/0x1111111111111111111111111111111111111111/transactions
+curl "https://alpha.lab.tone.finance/api/v1/wallets/0x1111111111111111111111111111111111111111/transactions?chain=eip155:8453&page_size=20"
+```
+
+**Response Format:**
+```json
+{
+  "wallet": "0x1111111111111111111111111111111111111111",
+  "transactions": [ /* same shape as above, status always "confirmed" */ ],
+  "nextPageToken": "CgwI…"
+}
+```
+
+`nextPageToken` is `null` on the last page. A page can hold fewer than `page_size` transactions, or none, while more follow: keep paging until `nextPageToken` is `null`, not until a page comes back empty.
+
+**Transaction fields:** `fundIds` are the Findex fund ULIDs the purchase was attributed to and `toneIds` the matching Tone IDs (unknown funds are left out). `transfers` are ERC-20 and native transfers to and from the wallet; `token` is `null` for the native coin, `direction` is `in` or `out` seen from the wallet, and `amount` is in the token's base units as a decimal string. Native coin moved by internal calls (e.g. inside batches) is not included. Addresses and hashes are always lower-case.
+
+Invalid input (and an invalid `page_token`) returns `400` with an `error` message.
+
 ## Configuration
 
 ### Environment Variables / Secrets

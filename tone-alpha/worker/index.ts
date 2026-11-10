@@ -5,6 +5,8 @@
 
 import { onRequestGet as handleChartGet, onRequestOptions as handleChartOptions } from './api/v1/tones/[id]/chart';
 import { onRequestGet as handleCompositionGet, onRequestOptions as handleCompositionOptions } from './api/v1/tones/[id]/composition';
+import { onRequestPost as handleTransactionsPost, onRequestOptions as handleTransactionsOptions } from './api/v1/transactions';
+import { onRequestGet as handleWalletTransactionsGet, onRequestOptions as handleWalletTransactionsOptions } from './api/v1/wallets/[address]/transactions';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -55,6 +57,52 @@ export default {
         return handleCompositionGet(context);
       } else if (request.method === 'OPTIONS') {
         return handleCompositionOptions();
+      }
+
+      return new Response('Method Not Allowed', {
+        status: 405,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
+    // Handle API route for reporting purchase transactions
+    // Pattern: /api/v1/transactions
+    if (url.pathname === '/api/v1/transactions') {
+      const context = {
+        request,
+        params: {},
+        env,
+        waitUntil: ctx.waitUntil.bind(ctx),
+      };
+
+      if (request.method === 'POST') {
+        return handleTransactionsPost(context);
+      } else if (request.method === 'OPTIONS') {
+        return handleTransactionsOptions();
+      }
+
+      return new Response('Method Not Allowed', {
+        status: 405,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
+    // Handle API routes for wallet purchase transactions
+    // Pattern: /api/v1/wallets/:address/transactions
+    const walletTransactionsMatch = url.pathname.match(/^\/api\/v1\/wallets\/([^/]+)\/transactions$/);
+
+    if (walletTransactionsMatch) {
+      const context = {
+        request,
+        params: { address: walletTransactionsMatch[1] },
+        env,
+        waitUntil: ctx.waitUntil.bind(ctx),
+      };
+
+      if (request.method === 'GET') {
+        return handleWalletTransactionsGet(context);
+      } else if (request.method === 'OPTIONS') {
+        return handleWalletTransactionsOptions();
       }
 
       return new Response('Method Not Allowed', {

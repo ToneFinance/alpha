@@ -163,10 +163,38 @@ export async function callFindex<Req, Res>(
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Findex API error: ${response.status} ${response.statusText}`
+    // Connect errors carry a JSON body: { code: "invalid_argument", message: "..." }
+    let code: string | null = null;
+    let detail = "";
+    try {
+      const body = (await response.json()) as { code?: string; message?: string };
+      code = body.code ?? null;
+      detail = body.message ?? "";
+    } catch {
+      // Not a Connect error body (e.g. gateway error page)
+    }
+    throw new FindexError(
+      `Findex API error: ${response.status} ${response.statusText}${detail ? ` - ${detail}` : ""}`,
+      response.status,
+      code,
+      detail
     );
   }
 
   return response.json();
+}
+
+/**
+ * Error returned by a FindexService RPC, with the Connect error code if present
+ */
+export class FindexError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string | null,
+    readonly detail: string
+  ) {
+    super(message);
+    this.name = "FindexError";
+  }
 }
